@@ -12,7 +12,7 @@
 void check_elk_mode_and_patch(unsigned char *rom, int start, int len, int expected) {
 #ifndef PICO
    char *elk_mode_prop = get_cmdline_prop("elk_mode");
-   int elk_mode = 0; // default 
+   int elk_mode = 0; // default
    if (elk_mode_prop) {
       elk_mode = atoi(elk_mode_prop);
    }

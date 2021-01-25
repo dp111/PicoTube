@@ -64,12 +64,12 @@ picofifo:
       mov   r1,#0xd0
       lsl   r1,#24
       LDR   r0,[r1,#FIFO_RD] // read data out of fifo
- 
+
  //     mov   r2,#1
  //     lsl   r2,#DEBUG_PIN2
  //     STR   r2,[r1,#GPIO_OE_SET]
  //     STR   R2,[r1,#GPIO_OUT_SET]
- 
+
       mov   r2,#15
       str   r2,[r1,#0x50] // Clear FIFO errors
 
@@ -96,7 +96,7 @@ picofifo:
  //     STR   R2,[r1,#GPIO_OUT_CLR]
 
 picofifoexit:
-      pop {pc}         
+      pop {pc}
 
 #endif
 // picotubecore
@@ -134,29 +134,29 @@ poll_tube_low_loop:
       LSR   r1, r0,#RNW_PIN+1
       BCC   write_cycle
 
-// so we are in a read cycle      
+// so we are in a read cycle
 
       LSL   r1, r0,#31-A2_PIN
       LSR   r1, r1,#(A0_PIN+(31-A2_PIN))    // Get just the address bits ( clear higher bits)
-      LDRB  r2, [r5,r1]             // tube regs 
+      LDRB  r2, [r5,r1]             // tube regs
       STR   r2, [r4,#GPIO_OUT_SET]  // Write data to bus
       str   r7, [r4,#GPIO_OE_SET]   // Make bus an output
 
       LSR   r1, r0,#A0_PIN+1
-      BCC   read_wait_for_clk_low   // status registers aren't read sensitive so don't post mail 
+      BCC   read_wait_for_clk_low   // status registers aren't read sensitive so don't post mail
 
       str   r0, [r4,#FIFO_WR]       // Post mail FIFO
-    
+
 read_wait_for_clk_low:
       ldr   r0, [r4,#GPIO_IN]
       LSR   r1, r0,#PHI2_PIN+1
       BCS   read_wait_for_clk_low
 
-      str   r7, [r4,#GPIO_OE_CLR]    // Stop driving the databus 
+      str   r7, [r4,#GPIO_OE_CLR]    // Stop driving the databus
       str   r7, [r4,#GPIO_OUT_CLR]   // clear databus to zero ready for next time
 
 // detect dummy read
-read_wait_for_clk_high2:    
+read_wait_for_clk_high2:
       ldr   r0, [r4,#GPIO_IN]  // Read GPIO
       LSR   r1, r0,#PHI2_PIN+1
       BCC   read_wait_for_clk_high2
@@ -188,7 +188,6 @@ post_reset_loop:
       b     poll_tube_low
 
 .align
-tube_regs: // 8 bytes 
+tube_regs: // 8 bytes
       .word 0
       .word 0
- 

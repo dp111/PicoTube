@@ -29,7 +29,7 @@ extern int test_pin;
 #ifdef PICO
 #ifndef DEFAULT_COPRO
 #define DEFAULT_COPRO 0
-#endif 
+#endif
 #include "copro-65tube.h"
 //#include "copro-arm2.h"
 #include "copro-null.h"
@@ -460,7 +460,7 @@ void main(void)
   benchmark();
 #endif
 
-   
+
 #ifdef HAS_MULTICORE
   LOG_DEBUG("main running on core %u\r\n", _get_core());
   start_core(1, _spin_core);

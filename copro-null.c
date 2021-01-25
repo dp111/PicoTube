@@ -2,7 +2,7 @@
  * Null Co Processor Emulation
  *
  * (c) 2016 David Banks
- * 
+ *
  */
 
 #include <stdio.h>
@@ -29,7 +29,7 @@ void copro_null_emulator() {
          // Exit on a change of copro ( changed in the FIQ handler)
          if (copro != last_copro) {
             return;
-  
+
       }
    }
 }

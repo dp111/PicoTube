@@ -335,7 +335,7 @@ static void __time_critical_func(tube_host_write)(uint32_t addr, uint8_t val)
       } else {
          HSTAT1 &= ~BYTE_TO_WORD(val & 0x3F);
       }
-   
+
 
       if ( HSTAT1 & HBIT_5) {
          tube_irq |= RESET_BIT;
@@ -414,14 +414,14 @@ static void __time_critical_func(tube_host_write)(uint32_t addr, uint8_t val)
       hp4 = val;
       PSTAT4 |=  0x80;
       HSTAT4 &= ~HBIT_6;
-      if (HSTAT1 & HBIT_2) tube_irq |= IRQ_BIT; 
+      if (HSTAT1 & HBIT_2) tube_irq |= IRQ_BIT;
       break;
    }
 }
 
 uint8_t __time_critical_func(tube_parasite_read)(uint32_t addr)
 {
-  
+
    uint8_t temp ;
    switch (addr & 7)
    {
@@ -517,7 +517,7 @@ void tube_parasite_write_banksel(uint32_t addr, uint8_t val)
 void __time_critical_func(tube_parasite_write)(uint32_t addr, uint8_t val)
 {
    _disable_interrupts();
-   
+
 #ifdef DEBUG_TUBE
    if (addr & 1) {
       tube_buffer[tube_index++] = TUBE_WRITE_MARKER | ((addr & 7) << 8) | val;
@@ -593,7 +593,7 @@ void __time_critical_func(tube_parasite_write)(uint32_t addr, uint8_t val)
 // Returns bit 2 set if RST is asserted by the host or tube
 
 void __time_critical_func(tube_io_handler)(uint32_t mail)
-{ 
+{
    if (((mail >> NRST_PIN) & 1) == 0)        // Check for Reset
    {
       tube_irq |= RESET_BIT;
@@ -780,11 +780,11 @@ void tube_init_hardware()
 }
 
 int tube_is_rst_active() {
-#ifndef PICO   
+#ifndef PICO
    return ((RPI_GpioBase->GPLEV0 & NRST_MASK) == 0) ;
 #else
    return (gpio_get(NRST_PIN)==0);
-#endif 
+#endif
 }
 #if 0
 static void tube_wait_for_rst_active() {
