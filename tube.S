@@ -61,6 +61,18 @@ arm_irq_handler:
 .thumb_func
 picofifo:
       push {lr}
+
+#ifdef USE_PIO
+
+      mov   r1,#0x50
+      lsl   r1,#24
+      mov   r0,#0x20
+      lsl   r0,#16
+      orr   r1, r0
+      LDR   r0,[r1,#0x20] // read data out of RX FIFO for SM0
+
+#else
+
       mov   r1,#0xd0
       lsl   r1,#24
       LDR   r0,[r1,#FIFO_RD] // read data out of fifo
@@ -72,6 +84,8 @@ picofifo:
 
       mov   r2,#15
       str   r2,[r1,#0x50] // Clear FIFO errors
+#endif
+
 
       BLX   tube_io_handler
 
@@ -103,8 +117,9 @@ picofifoexit:
 //
 
 .section .scratch_x.tubecore, "ax"
-.global picotubecore
 .global tube_regs
+.global picotubecore
+#ifndef USE_PIO
 .type picotubecore,%function
 .thumb_func
 picotubecore:
@@ -186,6 +201,7 @@ post_reset_loop:
       LSR   r1, r0, #NRST_PIN+1
       BCC   post_reset_loop
       b     poll_tube_low
+#endif
 
 .align
 tube_regs: // 8 bytes

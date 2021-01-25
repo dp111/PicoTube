@@ -1,0 +1,107 @@
+; Define the relative pin numbers
+
+.define DATA_PIN  0
+.define ADDR_PIN  8
+.define RNW_PIN  11
+.define CS_PIN   13
+.define PHI2_PIN 14
+
+; The bus6502_control program samples the address/data/rnw signals twice per access
+; and pushes the result into the FIFO
+;
+; (10)
+
+.program bus6502_control
+.wrap_target
+idle:
+    wait 1 pin CS_PIN       ; wait for CS to go high
+    wait 0 pin CS_PIN       ; wait for CS to go low
+                            ; TODO deglitch CS and add a bit of delay
+
+; TODO: filter status reads
+;    jmp pin, notify        ; the EXECCTRL_JMP_PIN is A0 (ignore status reads/writes)
+;    jmp idle
+; notify:
+
+    in pins, 16             ; take a sample when the control signals are stable
+    wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
+    wait 0 pin PHI2_PIN     ; wait for PHI2 pin to go low
+    in pins, 16             ; sample the write data just after the falling edge
+    push                    ; push sample into the Rx FIFO
+.wrap                       ; and back to idle again
+
+; The bus6502_pindirs progam sets the direction of 4-bits of the data bus
+; (two state machines are needed to cover the full 8-bit data bus)
+;
+; (11)
+
+.program bus6502_pindirs
+    set x, 0
+.wrap_target
+idle:
+    wait 1 pin CS_PIN       ; wait for CS to go high
+    wait 0 pin CS_PIN       ; wait for CS to go low
+                            ; TODO deglitch CS and add a bit of delay
+    wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
+    jmp pin read_cycle      ; the EXECCTRL_JMP_PIN is RNW
+    jmp idle
+
+read_cycle:
+    mov osr, ~x             ; osr = 0xffffffff
+    out pindirs, 8          ; start driving the databus
+    wait 0 pin PHI2_PIN     ; wait for the end of the bus cycle
+    mov osr, x              ; osr = 0x00000000
+    out pindirs, 8          ; start driving the databus
+.wrap                       ; and back to idle again
+
+; The bus6502_pins0 programs selects the approriate 8-bits out of 32-bit x,
+; and write this to the the data bus (specifically the output register)
+;
+; this is used when a2 = 0
+;
+; (9)
+
+.program bus6502_pins0
+.wrap_target
+idle:
+    in null, 32             ; make sure the ISR is clear
+    wait 1 pin (CS_PIN-8)   ; wait for CS to go high (-8 as the input mapping excludes D7:0)
+    wait 0 pin (CS_PIN-8)   ; wait for CS to go low
+                            ; TODO deglitch CS and add a bit of delay
+    in pins, 2              ; sample the lower two address bits into isr
+
+    jmp pin, idle           ; if a2=1 then loop back
+
+    mov y, isr              ; copy 2-bit address into y
+    mov osr, x              ; copy 32-bit x (holding the read data) into the osr
+loop:
+    out pins, 8             ; copy the lower 8 bits of the osr to data bus
+    jmp y--, loop           ; decrement the address, and loop back
+.wrap                       ; and back to idle again
+
+; The bus6502_pins0 programs selects the approriate 8-bits out of 32-bit x,
+; and write this to the the data bus (specifically the output register)
+;
+; this is used when a2 = 1
+;
+; (10)
+
+.program bus6502_pins1
+.wrap_target
+idle:
+    in null, 32             ; make sure the ISR is clear
+    wait 1 pin (CS_PIN-8)   ; wait for CS to go high (-8 as the input mapping excludes D7:0)
+    wait 0 pin (CS_PIN-8)   ; wait for CS to go low
+                            ; TODO deglitch CS and add a bit of delay
+    in pins, 2              ; sample the lower two address bits into isr
+
+    jmp pin, skip           ; if a2=0 then loop back
+    jmp idle
+skip:
+
+    mov y, isr              ; copy 2-bit address into y
+    mov osr, x              ; copy 32-bit x (holding the read data) into the osr
+loop:
+    out pins, 8             ; copy the lower 8 bits of the osr to data bus
+    jmp y--, loop           ; decrement the address, and loop back
+.wrap                       ; and back to idle again
