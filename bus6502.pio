@@ -13,6 +13,7 @@
 
 .program bus6502_control
 .wrap_target
+public entry_point:
 idle:
     wait 1 pin CS_PIN       ; wait for CS to go high
     wait 0 pin CS_PIN       ; wait for CS to go low
@@ -36,6 +37,7 @@ idle:
 ; (11)
 
 .program bus6502_pindirs
+public entry_point:
     set x, 0
 .wrap_target
 idle:
@@ -62,6 +64,7 @@ read_cycle:
 ; (9)
 
 .program bus6502_pins0
+public entry_point:
 .wrap_target
 idle:
     in null, 32             ; make sure the ISR is clear
@@ -87,6 +90,7 @@ loop:
 ; (10)
 
 .program bus6502_pins1
+public entry_point:
 .wrap_target
 idle:
     in null, 32             ; make sure the ISR is clear
