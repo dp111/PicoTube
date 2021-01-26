@@ -66,9 +66,9 @@ public entry_point:
 .wrap_target
 public entry_point:
     wait 1 irq 2             ; wait for irq 2 and clear it
-    wait 1 pin PHI2_PIN [20] ; wait for PHI2 pin to go high, and delay 150ns
-    in pins, 16              ; sample the gpio towards the end of Phase 2
+    wait 1 pin PHI2_PIN      ; wait for PHI2 pin to go high
     wait 0 pin PHI2_PIN      ; wait for PHI2 pin to go low
+    in pins, 16              ; sample the gpio towards a the end of Phase 2
     push                     ; push sample into the Rx FIFO
 .wrap
 
