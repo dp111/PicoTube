@@ -91,25 +91,26 @@ idle:
 ;
 ; this is used when a2 = 0
 ;
-; (9)
+; (11)
 
 .program bus6502_pins0
 public entry_point:
 .wrap_target
 idle:
-    in null, 32             ; make sure the ISR is clear
     wait 1 pin (CS_PIN-8)   ; wait for CS to go high (-8 as the input mapping excludes D7:0)
     wait 0 pin (CS_PIN-8)   ; wait for CS to go low
                             ; TODO deglitch CS and add a bit of delay
-    in pins, 2              ; sample the lower two address bits into isr
-
+    in pins, 2              ; right-shift the lower two address bits into isr
+    in null, 30             ; right-shift a further 30 zeros so address is correctly aligned
     jmp pin, idle           ; if a2=1 then loop back
-
     mov y, isr              ; copy 2-bit address into y
-    mov osr, x              ; copy 32-bit x (holding the read data) into the osr
+    mov isr, osr            ; copy 32-bit osr (holding the read data) into the isr
 loop:
-    out pins, 8             ; copy the lower 8 bits of the osr to data bus
+    jmp !y, done            ;
+    in null, 8              ; shift the isr right by 8-bits
     jmp y--, loop           ; decrement the address, and loop back
+done:
+    mov pins, isr           ; write the lower 8 bits of the isr to the databus
 .wrap                       ; and back to idle again
 
 ; The bus6502_pins0 programs selects the approriate 8-bits out of 32-bit x,
@@ -117,23 +118,25 @@ loop:
 ;
 ; this is used when a2 = 1
 ;
-; (9)
+; (11)
 
 .program bus6502_pins1
 read_cycle:
     mov y, isr              ; copy 2-bit address into y
-    mov osr, x              ; copy 32-bit x (holding the read data) into the osr
+    mov isr, osr            ; copy 32-bit osr (holding the read data) into the isr
 loop:
-    out pins, 8             ; copy the lower 8 bits of the osr to data bus
+    jmp !y, done            ;
+    in null, 8              ; shift the isr right by 8-bits
     jmp y--, loop           ; decrement the address, and loop back
+done:
+    mov pins, isr           ; write the lower 8 bits of the isr to the databus
 public entry_point:
 .wrap_target
 idle:
-    in null, 32             ; make sure the ISR is clear
     wait 1 pin (CS_PIN-8)   ; wait for CS to go high (-8 as the input mapping excludes D7:0)
     wait 0 pin (CS_PIN-8)   ; wait for CS to go low
                             ; TODO deglitch CS and add a bit of delay
-    in pins, 2              ; sample the lower two address bits into isr
-
-    jmp pin, read_cycle     ; if a2=0 then loop back
+    in pins, 2              ; right-shift the lower two address bits into isr
+    in null, 30             ; right-shift a further 30 zeros so address is correctly aligned
+    jmp pin, read_cycle     ; if a2=1 then peform a read
 .wrap                       ; and back to idle again

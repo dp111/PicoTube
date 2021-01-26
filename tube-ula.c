@@ -260,7 +260,7 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    sm_config_set_in_pins (&c2, pin + 8   ); // mapping for IN and WAIT (A1:0)
    sm_config_set_jmp_pin (&c2, pin + 10  ); // mapping for JMP (A2)
    sm_config_set_out_pins(&c2, pin,     8); // mapping for OUT (D7:0)
-   sm_config_set_in_shift(&c2, false, false, 0); // shift left, no auto push
+   sm_config_set_in_shift(&c2, true, false, 0); // shift right, no auto push
    pio_sm_init(p1, 1, offset_pins0 + bus6502_pins0_offset_entry_point, &c2);
 
    // Configure PIO2 / SM2 (the PIN state machine controlling the data output to D7:0)
@@ -268,7 +268,7 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    sm_config_set_in_pins (&c3, pin + 8   ); // mapping for IN and WAIT (A1:0)
    sm_config_set_jmp_pin (&c3, pin + 10  ); // mapping for JMP (A2)
    sm_config_set_out_pins(&c3, pin,     8); // mapping for OUT (D7:0)
-   sm_config_set_in_shift(&c3, false, false, 0); // shift left, no auto push
+   sm_config_set_in_shift(&c3, true, false, 0); // shift right, no auto push
    pio_sm_init(p1, 2, offset_pins1 + bus6502_pins1_offset_entry_point, &c3);
 
    // Enable all the state machines
@@ -285,8 +285,6 @@ static inline void set_x(PIO pio, uint sm, uint32_t x) {
    pio_sm_put(pio, sm, x);
    // execute: pull
    pio_sm_exec(pio, sm, pio_encode_pull(false, false));
-   // execute: mov x, osr
-   pio_sm_exec(pio, sm, pio_encode_mov(pio_x, pio_osr));
 }
 
 static inline void FLUSH_TUBE_REGS() {
