@@ -71,6 +71,7 @@ public entry_point:
 
 .program bus6502_pindirs
 read_cycle:
+    wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
     mov osr, ~x             ; osr = 0xffffffff
     out pindirs, 8          ; start driving the databus
     wait 0 pin PHI2_PIN     ; wait for the end of the bus cycle
@@ -80,9 +81,8 @@ public entry_point:
 .wrap_target
 idle:
     wait 1 pin CS_PIN       ; wait for CS to go high
-    wait 0 pin CS_PIN       ; wait for CS to go low
-                            ; TODO deglitch CS and add a bit of delay
-    wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
+    wait 0 pin CS_PIN [5]   ; wait for CS to go low
+                            ; delay a bit
     jmp pin read_cycle      ; the EXECCTRL_JMP_PIN is RNW
 .wrap                       ; and back to idle again
 
