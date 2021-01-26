@@ -84,9 +84,15 @@ loop:
 ;
 ; this is used when a2 = 1
 ;
-; (10)
+; (9)
 
 .program bus6502_pins1
+read_cycle:
+    mov y, isr              ; copy 2-bit address into y
+    mov osr, x              ; copy 32-bit x (holding the read data) into the osr
+loop:
+    out pins, 8             ; copy the lower 8 bits of the osr to data bus
+    jmp y--, loop           ; decrement the address, and loop back
 public entry_point:
 .wrap_target
 idle:
@@ -96,13 +102,5 @@ idle:
                             ; TODO deglitch CS and add a bit of delay
     in pins, 2              ; sample the lower two address bits into isr
 
-    jmp pin, skip           ; if a2=0 then loop back
-    jmp idle
-skip:
-
-    mov y, isr              ; copy 2-bit address into y
-    mov osr, x              ; copy 32-bit x (holding the read data) into the osr
-loop:
-    out pins, 8             ; copy the lower 8 bits of the osr to data bus
-    jmp y--, loop           ; decrement the address, and loop back
+    jmp pin, read_cycle     ; if a2=0 then loop back
 .wrap                       ; and back to idle again
