@@ -86,57 +86,47 @@ idle:
     jmp pin read_cycle      ; the EXECCTRL_JMP_PIN is RNW
 .wrap                       ; and back to idle again
 
-; The bus6502_pins0 programs selects the approriate 8-bits out of 32-bit x,
-; and write this to the the data bus (specifically the output register)
-;
-; this is used when a2 = 0
-;
-; (11)
 
-.program bus6502_pins0
+; The bus6502_a2 program waits for the falling edge of CS, then samples a2
+; If a2=0 then irq 2 is set to trigger the pins program running on SM2
+; If a2=1 then irq 3 is set to trigger the pins program running on SM2
+;
+; (5)
+
+.program bus6502_a2
+a2high:
+    irq set 3
 public entry_point:
 .wrap_target
 idle:
-    wait 1 pin (CS_PIN-8)   ; wait for CS to go high (-8 as the input mapping excludes D7:0)
-    wait 0 pin (CS_PIN-8)   ; wait for CS to go low
-                            ; TODO deglitch CS and add a bit of delay
+    wait 1 pin CS_PIN       ; wait for CS to go high (-8 as the input mapping excludes D7:0)
+    wait 0 pin CS_PIN [5]   ; wait for CS to go low
+                            ; delay a bit
+    jmp pin, a2high         ; sample the a2 pin, and set irq 2/3 accordingly
+    irq set 2
+.wrap
+
+
+; The bus6502_pins programs selects the approriate 8-bits out of 32-bit osr,
+; and writes this to the the data bus
+;
+; two copies of this will be deployed, controller be different irq bits
+;
+; (9)
+
+.program bus6502_pins
+public entry_point:
+.wrap_target
+idle:
+    wait 1 irq 0 rel        ; wait on irq 2 (sm2) or irq3 (sm3)
     in pins, 2              ; right-shift the lower two address bits into isr
     in null, 30             ; right-shift a further 30 zeros so address is correctly aligned
-    jmp pin, idle           ; if a2=1 then loop back
     mov y, isr              ; copy 2-bit address into y
     mov isr, osr            ; copy 32-bit osr (holding the read data) into the isr
-loop:
+loop:                       ; while y != 0
     jmp !y, done            ;
     in null, 8              ; shift the isr right by 8-bits
     jmp y--, loop           ; decrement the address, and loop back
 done:
     mov pins, isr           ; write the lower 8 bits of the isr to the databus
-.wrap                       ; and back to idle again
-
-; The bus6502_pins0 programs selects the approriate 8-bits out of 32-bit x,
-; and write this to the the data bus (specifically the output register)
-;
-; this is used when a2 = 1
-;
-; (11)
-
-.program bus6502_pins1
-read_cycle:
-    mov y, isr              ; copy 2-bit address into y
-    mov isr, osr            ; copy 32-bit osr (holding the read data) into the isr
-loop:
-    jmp !y, done            ;
-    in null, 8              ; shift the isr right by 8-bits
-    jmp y--, loop           ; decrement the address, and loop back
-done:
-    mov pins, isr           ; write the lower 8 bits of the isr to the databus
-public entry_point:
-.wrap_target
-idle:
-    wait 1 pin (CS_PIN-8)   ; wait for CS to go high (-8 as the input mapping excludes D7:0)
-    wait 0 pin (CS_PIN-8)   ; wait for CS to go low
-                            ; TODO deglitch CS and add a bit of delay
-    in pins, 2              ; right-shift the lower two address bits into isr
-    in null, 30             ; right-shift a further 30 zeros so address is correctly aligned
-    jmp pin, read_cycle     ; if a2=1 then peform a read
 .wrap                       ; and back to idle again

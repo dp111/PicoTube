@@ -204,12 +204,11 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    // Load the PINDIRS program
    uint offset_pindirs = pio_add_program(p1, &bus6502_pindirs_program);
 
-   // Load the PINS0 program (for A2=0)
-   uint offset_pins0 = pio_add_program(p1, &bus6502_pins0_program);
+   // Load the PINS program
+   uint offset_pins = pio_add_program(p1, &bus6502_pins_program);
 
-   // Load the PINS1 program (for A2=1)
-   uint offset_pins1 = pio_add_program(p1, &bus6502_pins1_program);
-
+   // Load the READ program
+   uint offset_a2 = pio_add_program(p1, &bus6502_a2_program);
 
    // Set the GPIO Function Select to connect the pin to the PIO
    for (uint i = 0; i < NUM_PINS; i++) {
@@ -248,34 +247,38 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    sm_config_set_fifo_join(&c03, PIO_FIFO_JOIN_RX);
    pio_sm_init(p0, 3, offset_control3 + bus6502_control3_offset_entry_point, &c03);
 
-   // Configure P1 / SM0 (the PINDIRS state machine controlling the direction of D7:0)
-   pio_sm_config c1 = bus6502_pindirs_program_get_default_config(offset_pindirs);
-   sm_config_set_in_pins (&c1, pin       ); // mapping for IN and WAIT
-   sm_config_set_jmp_pin (&c1, pin + 11  ); // mapping for JMP (RnW)
-   sm_config_set_out_pins(&c1, pin,     8); // mapping for OUT (D7:0)
-   pio_sm_init(p1, 0, offset_pindirs + bus6502_pindirs_offset_entry_point, &c1);
+   // Configure P1 / SM0 (the Read state machine, detecting a2)
+   pio_sm_config p1c0 = bus6502_a2_program_get_default_config(offset_a2);
+   sm_config_set_in_pins (&p1c0, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&p1c0, pin + 10); // mapping for JMP (A2)
+   pio_sm_init(p1, 0, offset_a2 + bus6502_a2_offset_entry_point, &p1c0);
 
-   // Configure P1 / SM1 (the PIN state machine controlling the data output to D7:0)
-   pio_sm_config c2 = bus6502_pins0_program_get_default_config(offset_pins0);
-   sm_config_set_in_pins (&c2, pin + 8   ); // mapping for IN and WAIT (A1:0)
-   sm_config_set_jmp_pin (&c2, pin + 10  ); // mapping for JMP (A2)
-   sm_config_set_out_pins(&c2, pin,     8); // mapping for OUT (D7:0)
-   sm_config_set_in_shift(&c2, true, false, 0); // shift right, no auto push
-   pio_sm_init(p1, 1, offset_pins0 + bus6502_pins0_offset_entry_point, &c2);
+   // Configure P1 / SM1 (the PINDIRS state machine controlling the direction of D7:0)
+   pio_sm_config p1c1 = bus6502_pindirs_program_get_default_config(offset_pindirs);
+   sm_config_set_in_pins (&p1c1, pin       ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&p1c1, pin + 11  ); // mapping for JMP (RnW)
+   sm_config_set_out_pins(&p1c1, pin,     8); // mapping for OUT (D7:0)
+   pio_sm_init(p1, 1, offset_pindirs + bus6502_pindirs_offset_entry_point, &p1c1);
 
-   // Configure PIO2 / SM2 (the PIN state machine controlling the data output to D7:0)
-   pio_sm_config c3 = bus6502_pins1_program_get_default_config(offset_pins1);
-   sm_config_set_in_pins (&c3, pin + 8   ); // mapping for IN and WAIT (A1:0)
-   sm_config_set_jmp_pin (&c3, pin + 10  ); // mapping for JMP (A2)
-   sm_config_set_out_pins(&c3, pin,     8); // mapping for OUT (D7:0)
-   sm_config_set_in_shift(&c3, true, false, 0); // shift right, no auto push
-   pio_sm_init(p1, 2, offset_pins1 + bus6502_pins1_offset_entry_point, &c3);
+   // Configure P1 / SM2 (the PIN state machine controlling the data output to D7:0)
+   pio_sm_config p1c2 = bus6502_pins_program_get_default_config(offset_pins);
+   sm_config_set_in_pins (&p1c2, pin + 8   ); // mapping for IN and WAIT (A1:0)
+   sm_config_set_out_pins(&p1c2, pin,     8); // mapping for OUT (D7:0)
+   sm_config_set_in_shift(&p1c2, true, false, 0); // shift right, no auto push
+   pio_sm_init(p1, 2, offset_pins + bus6502_pins_offset_entry_point, &p1c2);
+
+   // Configure P1/ SM3 (the PIN state machine controlling the data output to D7:0)
+   pio_sm_config p1c3 = bus6502_pins_program_get_default_config(offset_pins);
+   sm_config_set_in_pins (&p1c3, pin + 8   ); // mapping for IN and WAIT (A1:0)
+   sm_config_set_out_pins(&p1c3, pin,     8); // mapping for OUT (D7:0)
+   sm_config_set_in_shift(&p1c3, true, false, 0); // shift right, no auto push
+   pio_sm_init(p1, 3, offset_pins + bus6502_pins_offset_entry_point, &p1c3);
 
    // Enable all the state machines
    for (uint sm = 0; sm < 4; sm++) {
       pio_sm_set_enabled(p0, sm, true);
    }
-   for (uint sm = 0; sm < 3; sm++) {
+   for (uint sm = 0; sm < 4; sm++) {
       pio_sm_set_enabled(p1, sm, true);
    }
 }
@@ -289,8 +292,8 @@ static inline void set_x(PIO pio, uint sm, uint32_t x) {
 
 static inline void FLUSH_TUBE_REGS() {
    uint32_t *p = (uint32_t *)(&tube_regs);
-   set_x(pio1, 1, *p++);
    set_x(pio1, 2, *p++);
+   set_x(pio1, 3, *p++);
 }
 
 #else
