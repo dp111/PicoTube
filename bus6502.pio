@@ -27,13 +27,23 @@
 ; SM0 - Detect a genuine tube access (include deglitching nTUBE)
 
 .program bus6502_control0
+reset:
+    irq set 2                ; reset detected
+    wait 1 gpio NRST_PIN     ; wait for reset released
 .wrap_target
 public entry_point:
 idle:
-    wait 1 pin NTUBE_PIN     ; wait for nTUBE to go high
-    wait 0 pin NTUBE_PIN [7] ; wait for nTUBE to go low
-                             ; delay ~50ns
-    jmp pin, idle            ; loop back to deglitch nTUBE has gone high again
+    wait 1 gpio PHI2_PIN     ; wait for PHI2 to go high
+
+    in pins, 1               ; right-shift nRST into ISR (bit 31)
+    in null, 31              ; right-shift a further 31 zeros so nRST is correctly aligned
+    mov x, isr               ; y = nRST
+    set y, 1
+    jmp x!=y reset           ; if nRST != 1 then jmp to reset
+
+    wait 0 gpio PHI2_PIN [16]; wait for PHI2 to go low, and delay ~125ns
+
+    jmp pin, idle            ; test nTUBE half waythrough phase1 when it should be stable
     irq set 0                ; irq 0 indicates nTUBE has definitely been asserted
 .wrap
 

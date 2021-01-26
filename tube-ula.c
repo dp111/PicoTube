@@ -224,8 +224,9 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
 
    // Configure P0 / SM0 (the control state machine)
    pio_sm_config c00 = bus6502_control0_program_get_default_config(offset_control0);
-   sm_config_set_in_pins (&c00, pin     ); // mapping for IN and WAIT
-   sm_config_set_jmp_pin (&c00, pin + 13); // mapping for JMP (CS)
+   sm_config_set_in_pins (&c00, pin + 12); // mapping for IN and WAIT (nRST)
+   sm_config_set_jmp_pin (&c00, pin + 13); // mapping for JMP (nTUBE)
+   sm_config_set_in_shift(&c00, true, false, 0); // shift right, no auto push
    pio_sm_init(p0, 0, offset_control0 + bus6502_control0_offset_entry_point, &c00);
 
    // Configure P0 / SM1 (the control state machine)
