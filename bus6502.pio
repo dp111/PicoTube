@@ -34,11 +34,16 @@ idle:
 ; The bus6502_pindirs progam sets the direction of 4-bits of the data bus
 ; (two state machines are needed to cover the full 8-bit data bus)
 ;
-; (11)
+; (9)
 
 .program bus6502_pindirs
+read_cycle:
+    mov osr, ~x             ; osr = 0xffffffff
+    out pindirs, 8          ; start driving the databus
+    wait 0 pin PHI2_PIN     ; wait for the end of the bus cycle
+    mov osr, x              ; osr = 0x00000000
+    out pindirs, 8          ; start driving the databus
 public entry_point:
-    set x, 0
 .wrap_target
 idle:
     wait 1 pin CS_PIN       ; wait for CS to go high
@@ -46,14 +51,6 @@ idle:
                             ; TODO deglitch CS and add a bit of delay
     wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
     jmp pin read_cycle      ; the EXECCTRL_JMP_PIN is RNW
-    jmp idle
-
-read_cycle:
-    mov osr, ~x             ; osr = 0xffffffff
-    out pindirs, 8          ; start driving the databus
-    wait 0 pin PHI2_PIN     ; wait for the end of the bus cycle
-    mov osr, x              ; osr = 0x00000000
-    out pindirs, 8          ; start driving the databus
 .wrap                       ; and back to idle again
 
 ; The bus6502_pins0 programs selects the approriate 8-bits out of 32-bit x,
