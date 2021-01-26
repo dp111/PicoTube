@@ -245,6 +245,7 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    pio_sm_config c03 = bus6502_control3_program_get_default_config(offset_control3);
    sm_config_set_in_pins (&c03, pin     ); // mapping for IN and WAIT
    sm_config_set_in_shift(&c03, false, false, 0); // shift left, no auto push
+   sm_config_set_fifo_join(&c03, PIO_FIFO_JOIN_RX);
    pio_sm_init(p0, 3, offset_control3 + bus6502_control3_offset_entry_point, &c03);
 
    // Configure P1 / SM0 (the PINDIRS state machine controlling the direction of D7:0)
