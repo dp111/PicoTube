@@ -6,30 +6,64 @@
 .define CS_PIN   13
 .define PHI2_PIN 14
 
+; ====================================================================================
+; PIO 0 - control
+; ====================================================================================
+
 ; The bus6502_control program samples the address/data/rnw signals twice per access
 ; and pushes the result into the FIFO
 ;
-; (10)
+; (4 + 4 + 3 + 5 = 16)
 
-.program bus6502_control
+.program bus6502_control0
 .wrap_target
 public entry_point:
 idle:
     wait 1 pin CS_PIN       ; wait for CS to go high
-    wait 0 pin CS_PIN       ; wait for CS to go low
-                            ; TODO deglitch CS and add a bit of delay
+    wait 0 pin CS_PIN [7]   ; wait for CS to go low
+                            ; delay ~50ns
+    jmp pin, idle           ; deglitch CS
+    irq set 0               ; irq 0 indicates CS has definitely been asserted
+.wrap
 
-; TODO: filter status reads
-;    jmp pin, notify        ; the EXECCTRL_JMP_PIN is A0 (ignore status reads/writes)
-;    jmp idle
-; notify:
+; Test the RnW bit
+.program bus6502_control1
+read_cycle:
+    irq set 1               ; irq 1 indicates a read cycle occurred
+.wrap_target
+public entry_point:
+    wait 1 irq 0            ; wait for irq 0, and clear it
+    jmp pin, read_cycle     ; test the RnW bit
+    irq set 2               ; irq 2 triggers the capture
+.wrap
 
+; Test the A0 bit
+.program bus6502_control2
+read_cycle:
+    irq set 2               ; irq 2 triggers the capture
+.wrap_target
+public entry_point:
+    wait 1 irq 1            ; wait for irq 1, and clear it
+    jmp pin, read_cycle     ; if A0=1 (non-status) then capture
+.wrap
+
+; Capture the GPIOs
+.program bus6502_control3
+.wrap_target
+public entry_point:
+    wait 1 irq 2            ; wait for the capture trigger
     in pins, 16             ; take a sample when the control signals are stable
     wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
     wait 0 pin PHI2_PIN     ; wait for PHI2 pin to go low
     in pins, 16             ; sample the write data just after the falling edge
     push                    ; push sample into the Rx FIFO
 .wrap                       ; and back to idle again
+
+
+; ====================================================================================
+; PIO 1 - read cycle
+; ====================================================================================
+
 
 ; The bus6502_pindirs progam sets the direction of 4-bits of the data bus
 ; (two state machines are needed to cover the full 8-bit data bus)

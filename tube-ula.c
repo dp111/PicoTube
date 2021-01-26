@@ -196,7 +196,10 @@ static void tube_updateints_NMI()
 static void pio_init(PIO p0, PIO p1, uint pin) {
 
    // Load the Control program
-   uint offset_control = pio_add_program(p0, &bus6502_control_program);
+   uint offset_control0 = pio_add_program(p0, &bus6502_control0_program);
+   uint offset_control1 = pio_add_program(p0, &bus6502_control1_program);
+   uint offset_control2 = pio_add_program(p0, &bus6502_control2_program);
+   uint offset_control3 = pio_add_program(p0, &bus6502_control3_program);
 
    // Load the PINDIRS program
    uint offset_pindirs = pio_add_program(p1, &bus6502_pindirs_program);
@@ -221,11 +224,28 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    }
 
    // Configure P0 / SM0 (the control state machine)
-   pio_sm_config c0 = bus6502_control_program_get_default_config(offset_control);
-   sm_config_set_in_pins (&c0, pin       ); // mapping for IN and WAIT
-   sm_config_set_jmp_pin (&c0, pin + 8   ); // mapping for JMP (A0)
-   sm_config_set_in_shift(&c0, true, false, 0); // shift right, no auto push
-   pio_sm_init(p0, 0, offset_control + bus6502_control_offset_entry_point, &c0);
+   pio_sm_config c00 = bus6502_control0_program_get_default_config(offset_control0);
+   sm_config_set_in_pins (&c00, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&c00, pin + 13); // mapping for JMP (CS)
+   pio_sm_init(p0, 0, offset_control0 + bus6502_control0_offset_entry_point, &c00);
+
+   // Configure P0 / SM1 (the control state machine)
+   pio_sm_config c01 = bus6502_control1_program_get_default_config(offset_control1);
+   sm_config_set_in_pins (&c01, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&c01, pin + 11); // mapping for JMP (RnW)
+   pio_sm_init(p0, 1, offset_control1 + bus6502_control1_offset_entry_point, &c01);
+
+   // Configure P0 / SM2 (the control state machine)
+   pio_sm_config c02 = bus6502_control2_program_get_default_config(offset_control2);
+   sm_config_set_in_pins (&c02, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&c02, pin + 8 ); // mapping for JMP (A0)
+   pio_sm_init(p0, 2, offset_control2 + bus6502_control2_offset_entry_point, &c02);
+
+   // Configure P0 / SM3 (the control state machine)
+   pio_sm_config c03 = bus6502_control3_program_get_default_config(offset_control3);
+   sm_config_set_in_pins (&c03, pin     ); // mapping for IN and WAIT
+   sm_config_set_in_shift(&c03, true, false, 0); // shift right, no auto push
+   pio_sm_init(p0, 3, offset_control3 + bus6502_control3_offset_entry_point, &c03);
 
    // Configure P1 / SM0 (the PINDIRS state machine controlling the direction of D7:0)
    pio_sm_config c1 = bus6502_pindirs_program_get_default_config(offset_pindirs);
@@ -251,7 +271,9 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    pio_sm_init(p1, 2, offset_pins1 + bus6502_pins1_offset_entry_point, &c3);
 
    // Enable all the state machines
-   pio_sm_set_enabled(p0, 0, true);
+   for (uint sm = 0; sm < 4; sm++) {
+      pio_sm_set_enabled(p0, sm, true);
+   }
    for (uint sm = 0; sm < 3; sm++) {
       pio_sm_set_enabled(p1, sm, true);
    }
@@ -711,8 +733,7 @@ void __time_critical_func(tube_io_handler)(uint32_t mail)
 #endif
          tube_host_write(addr, data );
       } else {
-         if (addr & 1)
-            tube_host_read(addr);
+         tube_host_read(addr);
       }
    }
 }
@@ -1014,7 +1035,7 @@ void start_vc_ula()
 #ifdef USE_PIO
    irq_set_exclusive_handler(PIO0_IRQ_0, picofifo);
    irq_set_enabled(PIO0_IRQ_0, true);
-   pio0->inte0 = PIO_IRQ0_INTE_SM0_RXNEMPTY_BITS;
+   pio0->inte0 = PIO_IRQ0_INTE_SM3_RXNEMPTY_BITS;
 #else
    multicore_launch_core1(picotubecore);
    irq_set_exclusive_handler(SIO_IRQ_PROC0, picofifo);

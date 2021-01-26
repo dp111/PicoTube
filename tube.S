@@ -69,7 +69,7 @@ picofifo:
       mov   r0,#0x20
       lsl   r0,#16
       orr   r1, r0
-      LDR   r0,[r1,#0x20] // read data out of RX FIFO for SM0
+      LDR   r0,[r1,#0x2C] // read data out of RX FIFO for PIO0 SM3
 
 #else
 
