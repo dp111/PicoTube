@@ -51,14 +51,13 @@ public entry_point:
 .program bus6502_control3
 .wrap_target
 public entry_point:
-    wait 1 irq 2            ; wait for the capture trigger
-    in pins, 16             ; take a sample when the control signals are stable
-    wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
+    wait 1 irq 2            ; wait for irq 2 and clear it
+    wait 1 pin PHI2_PIN [20]; wait for PHI2 pin to go high
+                            ; delay 150ns
+    in pins, 16             ; sample the gpio towards the end of Phase 2
     wait 0 pin PHI2_PIN     ; wait for PHI2 pin to go low
-    in pins, 16             ; sample the write data just after the falling edge
     push                    ; push sample into the Rx FIFO
 .wrap                       ; and back to idle again
-
 
 ; ====================================================================================
 ; PIO 1 - read cycle

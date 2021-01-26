@@ -244,7 +244,7 @@ static void pio_init(PIO p0, PIO p1, uint pin) {
    // Configure P0 / SM3 (the control state machine)
    pio_sm_config c03 = bus6502_control3_program_get_default_config(offset_control3);
    sm_config_set_in_pins (&c03, pin     ); // mapping for IN and WAIT
-   sm_config_set_in_shift(&c03, true, false, 0); // shift right, no auto push
+   sm_config_set_in_shift(&c03, false, false, 0); // shift left, no auto push
    pio_sm_init(p0, 3, offset_control3 + bus6502_control3_offset_entry_point, &c03);
 
    // Configure P1 / SM0 (the PINDIRS state machine controlling the direction of D7:0)
@@ -726,12 +726,7 @@ void __time_critical_func(tube_io_handler)(uint32_t mail)
    {
       uint32_t addr = (mail>>A0_PIN) & 7;
       if ( ( (mail >>RNW_PIN ) & 1) == 0) {  // Check read write flag
-#ifdef USE_PIO
-         uint8_t data = mail >> 16; // Use the second sample
-#else
-         uint8_t data = mail;
-#endif
-         tube_host_write(addr, data );
+         tube_host_write(addr, mail );
       } else {
          tube_host_read(addr);
       }
