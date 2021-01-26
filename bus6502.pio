@@ -1,132 +1,164 @@
 ; Define the relative pin numbers
 
-.define DATA_PIN  0
-.define ADDR_PIN  8
-.define RNW_PIN  11
-.define CS_PIN   13
-.define PHI2_PIN 14
+.define DATA_PIN     0
+.define ADDR_PIN     8
+.define RNW_PIN     11
+.define NRST_PIN    12
+.define NTUBE_PIN   13
+.define PHI2_PIN    14
 
 ; ====================================================================================
-; PIO 0 - control
-; ====================================================================================
-
-; The bus6502_control program samples the address/data/rnw signals twice per access
-; and pushes the result into the FIFO
+; PIO 0
 ;
-; (4 + 4 + 3 + 5 = 16)
+; Detect a tube access and place a sample of the GPIO bits in the Tx FIFO (of SM3)
+;
+; In a bit more detail:
+; - SM0 - Detect a genuine tube access (include deglitching nTUBE)
+; - SM1 - Test the RnW pin (to allow some reads to be filtered out)
+; - SM2 - Test the A0 pin (to allow status reads to be filtered out)
+; - SM3 - Re-sample GPIOs towards the end of phase 2 and push to Tx FIFO
+;
+; All GPIOs are used as inputs; nothing is driven back
+;
+; (4 + 4 + 3 + 5 = 16 instructions)
+;
+; ====================================================================================
+
+; SM0 - Detect a genuine tube access (include deglitching nTUBE)
 
 .program bus6502_control0
 .wrap_target
 public entry_point:
 idle:
-    wait 1 pin CS_PIN       ; wait for CS to go high
-    wait 0 pin CS_PIN [7]   ; wait for CS to go low
-                            ; delay ~50ns
-    jmp pin, idle           ; deglitch CS
-    irq set 0               ; irq 0 indicates CS has definitely been asserted
+    wait 1 pin NTUBE_PIN     ; wait for nTUBE to go high
+    wait 0 pin NTUBE_PIN [7] ; wait for nTUBE to go low
+                             ; delay ~50ns
+    jmp pin, idle            ; loop back to deglitch nTUBE has gone high again
+    irq set 0                ; irq 0 indicates nTUBE has definitely been asserted
 .wrap
 
-; Test the RnW bit
+; SM1 - Test the RnW pin
+
 .program bus6502_control1
 read_cycle:
-    irq set 1               ; irq 1 indicates a read cycle occurred
+    irq set 1                ; read cycle, so activate sm2 for further filtering
 .wrap_target
 public entry_point:
-    wait 1 irq 0            ; wait for irq 0, and clear it
-    jmp pin, read_cycle     ; test the RnW bit
-    irq set 2               ; irq 2 triggers the capture
+    wait 1 irq 0             ; wait for irq 0 and clear it
+    jmp pin, read_cycle      ; test the RnW bit
+    irq set 2                ; write cycle, so activate sm3 to sample the GPIOs
 .wrap
 
-; Test the A0 bit
+; SM2 - Test the A0 pin
+
 .program bus6502_control2
 read_cycle:
-    irq set 2               ; irq 2 triggers the capture
+    irq set 2                ; A0=1, so activate sm3 to sample the GPIOs
 .wrap_target
 public entry_point:
-    wait 1 irq 1            ; wait for irq 1, and clear it
-    jmp pin, read_cycle     ; if A0=1 (non-status) then capture
+    wait 1 irq 1             ; wait for irq 1 and clear it
+    jmp pin, read_cycle      ; test if A0=1, and if so jmp to read_cycle
 .wrap
 
-; Capture the GPIOs
+; SM3 - Re-sample GPIOs towards the end of phase 2 and push to Tx FIFO
+
 .program bus6502_control3
 .wrap_target
 public entry_point:
-    wait 1 irq 2            ; wait for irq 2 and clear it
-    wait 1 pin PHI2_PIN [20]; wait for PHI2 pin to go high
-                            ; delay 150ns
-    in pins, 16             ; sample the gpio towards the end of Phase 2
-    wait 0 pin PHI2_PIN     ; wait for PHI2 pin to go low
-    push                    ; push sample into the Rx FIFO
-.wrap                       ; and back to idle again
+    wait 1 irq 2             ; wait for irq 2 and clear it
+    wait 1 pin PHI2_PIN [20] ; wait for PHI2 pin to go high, and delay 150ns
+    in pins, 16              ; sample the gpio towards the end of Phase 2
+    wait 0 pin PHI2_PIN      ; wait for PHI2 pin to go low
+    push                     ; push sample into the Rx FIFO
+.wrap
 
 ; ====================================================================================
-; PIO 1 - read cycle
-; ====================================================================================
-
-
-; The bus6502_pindirs progam sets the direction of 4-bits of the data bus
-; (two state machines are needed to cover the full 8-bit data bus)
+; PIO 1
 ;
-; (9)
+; Detect a tube read cycle and drive the right data
+;
+; In a bit more detail:
+; - SM0 - Detect a tube read cycle and update D[7:0] pindirs to drive during phase2
+; - SM1 - Detect a tube access, sample A2 and trigger SM2 or SM3 depending on the value
+; - SM2 - Sample A[1:0] and select one of 4 bytes in the 32-bit OSR to output on D[7:0]
+; - SM3 - Sample A[1:0] and select one of 4 bytes in the 32-bit OSR to output on D[7:0]
+;
+; Data Bus GPIOs are reconfigured as outputs during Phi2
+;
+; The decision to drive the data bus is made by SM0 (which controls the data pin direction)
+;
+; The data that will be driven is selected by SM1/SM2/SM3. These could execute every
+; 6502 cycle without causing any issues, but currently only run during tube accesses.
+;
+; The read data for tube_regs 0..3 are stored in the 32-bit OSR on SM2
+; The read data for tube_regs 4..7 are stored in the 32-bit OSR on SM3
+;
+; These copies are kept in sync with the C tube_regs[] by FLUSH_TUBE_REGS() in tube-ula.c
+; Any the there is a change, the OSR are updated by writing to the TX FIFO, then injecting
+; a pull instruction.
+;
+; The process to output the right byte is non-destructive (i.e. it doesn't change the OSR)
+;
+;
+; (9 + 5 + 9 = 23 instructions)
+;
+; ====================================================================================
+
+
+; SM0 - Detect a tube read cycle and update D[7:0] pindirs to drive during phase2
+; (x is set to 0 on reset)
+; TODO - find a way to deglitch NTUBE
 
 .program bus6502_pindirs
 read_cycle:
-    wait 1 pin PHI2_PIN     ; wait for PHI2 pin to go high
-    mov osr, ~x             ; osr = 0xffffffff
-    out pindirs, 8          ; start driving the databus
-    wait 0 pin PHI2_PIN     ; wait for the end of the bus cycle
-    mov osr, x              ; osr = 0x00000000
-    out pindirs, 8          ; start driving the databus
+    wait 1 pin PHI2_PIN      ; wait for PHI2 to go high
+    mov osr, ~x              ; OSR = 0xffffffff
+    out pindirs, 8           ; start driving the databus
+    wait 0 pin PHI2_PIN      ; wait for PHI2 to go low
+    mov osr, x               ; OSR = 0x00000000
+    out pindirs, 8           ; stop driving the databus
 public entry_point:
 .wrap_target
-idle:
-    wait 1 pin CS_PIN       ; wait for CS to go high
-    wait 0 pin CS_PIN [5]   ; wait for CS to go low
-                            ; delay a bit
-    jmp pin read_cycle      ; the EXECCTRL_JMP_PIN is RNW
-.wrap                       ; and back to idle again
-
-
-; The bus6502_a2 program waits for the falling edge of CS, then samples a2
-; If a2=0 then irq 2 is set to trigger the pins program running on SM2
-; If a2=1 then irq 3 is set to trigger the pins program running on SM2
-;
-; (5)
-
-.program bus6502_a2
-a2high:
-    irq set 3
-public entry_point:
-.wrap_target
-idle:
-    wait 1 pin CS_PIN       ; wait for CS to go high (-8 as the input mapping excludes D7:0)
-    wait 0 pin CS_PIN [5]   ; wait for CS to go low
-                            ; delay a bit
-    jmp pin, a2high         ; sample the a2 pin, and set irq 2/3 accordingly
-    irq set 2
+    wait 1 pin NTUBE_PIN     ; wait for nTUBE to go high
+    wait 0 pin NTUBE_PIN [5] ; wait for nTUBE to go low
+                             ; delay a bit
+    jmp pin read_cycle       ; if RnW then jmp to read_cycle
 .wrap
 
 
-; The bus6502_pins programs selects the approriate 8-bits out of 32-bit osr,
-; and writes this to the the data bus
+; SM1 - Detect a tube access, sample A2 and trigger SM2 or SM3 depending on the value
+;   If a2=0 then set irq 2 to trigger the pins program running on SM2
+;   If a2=1 then set irq 3 to trigger the pins program running on SM3
+
+.program bus6502_a2
+a2high:
+    irq set 3                ; irq3 will trigger SM3
+public entry_point:
+.wrap_target
+    wait 1 pin NTUBE_PIN     ; wait for nTUBE to go high
+    wait 0 pin NTUBE_PIN [5] ; wait for nTUBE to go low
+                             ; delay a bit
+    jmp pin, a2high          ; sample the a2 pin, and set irq 2/3 accordingly
+    irq set 2                ; irq2 will trigger SM2
+.wrap
+
+
+; SM2/SM3 - Sample A[1:0] and select one of 4 bytes in the 32-bit OSR to output on D[7:0]
 ;
-; two copies of this will be deployed, controller be different irq bits
-;
-; (9)
+; SM2/SM3 are running the same program, but triggered with different irq bits
 
 .program bus6502_pins
 public entry_point:
 .wrap_target
-idle:
-    wait 1 irq 0 rel        ; wait on irq 2 (sm2) or irq3 (sm3)
-    in pins, 2              ; right-shift the lower two address bits into isr
+    wait 1 irq 0 rel        ; wait on irq 2 (SM2) or irq3 (SM3)
+    in pins, 2              ; right-shift the lower A[1:0] into ISR (bits 31:30)
     in null, 30             ; right-shift a further 30 zeros so address is correctly aligned
-    mov y, isr              ; copy 2-bit address into y
-    mov isr, osr            ; copy 32-bit osr (holding the read data) into the isr
+    mov y, isr              ; copy 2-bit address into the y counter
+    mov isr, osr            ; copy 32-bit OSR (holding the read data) into ISR
 loop:                       ; while y != 0
     jmp !y, done            ;
-    in null, 8              ; shift the isr right by 8-bits
-    jmp y--, loop           ; decrement the address, and loop back
+    in null, 8              ; shift the ISR right 8-bits to select the next byte
+    jmp y--, loop           ; decrement the address counter, and loop back if non zero
 done:
-    mov pins, isr           ; write the lower 8 bits of the isr to the databus
-.wrap                       ; and back to idle again
+    mov pins, isr           ; write the lower 8 bits of the ISR to the databus
+.wrap
