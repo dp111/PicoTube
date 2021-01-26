@@ -13,18 +13,18 @@
 ; Detect a tube access and place a sample of the GPIO bits in the Tx FIFO (of SM3)
 ;
 ; In a bit more detail:
-; - SM0 - Detect a genuine tube access (include deglitching nTUBE)
+; - SM0 - Detect a genuine tube access (include deglitching nTUBE) or nRST
 ; - SM1 - Test the RnW pin (to allow some reads to be filtered out)
 ; - SM2 - Test the A0 pin (to allow status reads to be filtered out)
 ; - SM3 - Re-sample GPIOs towards the end of phase 2 and push to Tx FIFO
 ;
 ; All GPIOs are used as inputs; nothing is driven back
 ;
-; (4 + 4 + 3 + 5 = 16 instructions)
+; (11 + 4 + 3 + 5 = 23 instructions)
 ;
 ; ====================================================================================
 
-; SM0 - Detect a genuine tube access (include deglitching nTUBE)
+; SM0 - Detect a genuine tube access (include deglitching nTUBE) or nRST
 
 .program bus6502_control0
 reset:
@@ -85,7 +85,7 @@ public entry_point:
 ; ====================================================================================
 ; PIO 1
 ;
-; Detect a tube read cycle and drive the right data
+; Detect a tube read cycle and drive the data bus with a local copy of tube_regs
 ;
 ; In a bit more detail:
 ; - SM0 - Detect a tube read cycle and update D[7:0] pindirs to drive during phase2
@@ -104,11 +104,10 @@ public entry_point:
 ; The read data for tube_regs 4..7 are stored in the 32-bit OSR on SM3
 ;
 ; These copies are kept in sync with the C tube_regs[] by FLUSH_TUBE_REGS() in tube-ula.c
-; Any the there is a change, the OSR are updated by writing to the TX FIFO, then injecting
-; a pull instruction.
+; Any time there is a change to tube_regs[], the copy held in the OSR in SM2/3 is refreshed
+; by writing to the TX FIFOs and then injecting a pull instriction into SM2/3.
 ;
-; The process to output the right byte is non-destructive (i.e. it doesn't change the OSR)
-;
+; The process to select a byte from the OSR is non-destructive (i.e. it doesn't change the OSR)
 ;
 ; (9 + 5 + 9 = 23 instructions)
 ;
