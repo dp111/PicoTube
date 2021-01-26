@@ -431,6 +431,7 @@ static void __time_critical_func(tube_host_read)(uint32_t addr)
       }
       break;
    }
+   FLUSH_TUBE_REGS();
 }
 
 static void __time_critical_func(tube_host_write)(uint32_t addr, uint8_t val)
