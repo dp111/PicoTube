@@ -111,11 +111,11 @@ public entry_point:
 
 .program bus6502_pindirs
 read_cycle:
-    wait 1 pin PHI2_PIN      ; wait for PHI2 to go high
     mov osr, ~x              ; OSR = 0xffffffff
+    wait 1 pin PHI2_PIN      ; wait for PHI2 to go high
     out pindirs, 8           ; start driving the databus
-    wait 0 pin PHI2_PIN      ; wait for PHI2 to go low
     mov osr, x               ; OSR = 0x00000000
+    wait 0 pin PHI2_PIN      ; wait for PHI2 to go low
     out pindirs, 8           ; stop driving the databus
 public entry_point:
 .wrap_target
