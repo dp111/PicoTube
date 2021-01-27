@@ -235,11 +235,13 @@ r1  effective address
 .macro  GET_ABY_LOCATION // $0000,Y
    GET_ABS_LOCATION r1
    add   r1, rYreg
+   uxth  r1, r1
 .endm
 
 .macro  GET_ABX_LOCATION // $0000,X
    GET_ABS_LOCATION r1
    add   r1, rXreg
+   uxth  r1, r1
 .endm
 
 .macro load_operand_byte reg=r0
