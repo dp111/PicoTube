@@ -7,6 +7,30 @@
 .define NTUBE_PIN   13
 .define PHI2_PIN    14
 
+; tAD is the delay in between the falling edge of Phi2 and NTUBE/A/RnW being sampled
+;
+; this parameter is critial
+; - too low and you potentially miss ntube (which can lag phi2 by ~100ns)
+; - too high and you erode the read data setup time
+;
+; for my SY6502A 20 seems to work, 16 will often crash in tube elite
+; for my UM6502CE 16 seems to work, 20 will often crash in tube elite
+;
+; Possibly noise is worse in my environment because I'm currently using a tube silencer
+; and a breadboard. Grounding is particulaly poor. The address bus suffers glitches in
+; in the middle of the cycle
+;
+
+.define tAD         20  ; 150ns
+
+; tDB is the delay between the rising edge of a signal and when it's safe to start
+; looking for the falling edge. It's used mostly on Phi2, which can suffer noise
+; due to crosstalk from the data bus being driven
+;
+; this paramater is much less critical
+
+.define tDB         16  ; 120ns
+
 ; ====================================================================================
 ; PIO 0
 ;
@@ -33,7 +57,8 @@ reset:
 .wrap_target
 public entry_point:
 idle:
-    wait 1 gpio PHI2_PIN       ; wait for PHI2 to go high
+    wait 1 gpio PHI2_PIN [tDB] ; wait for PHI2 to go high
+                               ; delay tDB to sample nRST away from when data bus changing to avoid crosstalk
 
     in pins, 1                 ; right-shift nRST into ISR (bit 31)
     in null, 31                ; right-shift a further 31 zeros so nRST is correctly aligned
@@ -41,7 +66,8 @@ idle:
     set y, 1
     jmp x!=y reset             ; if nRST != 1 then jmp to reset
 
-    wait 0 gpio PHI2_PIN [16]  ; wait for PHI2 to go low, and delay ~125ns
+    wait 0 gpio PHI2_PIN [tAD] ; wait for PHI2 to go low
+                               ; delay tAD to sample nTUBE when stable
 
     jmp pin, idle              ; test nTUBE half waythrough phase1 when it should be stable
     irq set 0                  ; irq 0 indicates nTUBE has definitely been asserted
@@ -76,7 +102,8 @@ public entry_point:
 .wrap_target
 public entry_point:
     wait 1 irq 2               ; wait for irq 2 and clear it
-    wait 1 pin PHI2_PIN        ; wait for PHI2 pin to go high
+    wait 1 pin PHI2_PIN [tDB]  ; wait for PHI2 pin to go high
+                               ; delay tDB in case of noise around transition
     wait 0 pin PHI2_PIN        ; wait for PHI2 pin to go low
     in pins, 16                ; sample the gpio towards a the end of Phase 2
     push                       ; push sample into the Rx FIFO
@@ -128,9 +155,9 @@ read_cycle:
     out pindirs, 8             ; stop driving the databus
 public entry_point:
 .wrap_target
-    wait 1 pin NTUBE_PIN       ; wait for nTUBE to go high
-    wait 0 pin NTUBE_PIN [5]   ; wait for nTUBE to go low
-                               ; delay a bit
+    wait 1 pin NTUBE_PIN [tDB] ; wait for nTUBE to go high
+                               ; delay tDB in case of noise around transition
+    wait 0 pin NTUBE_PIN       ; wait for nTUBE to go low
     jmp pin read_cycle         ; if RnW then jmp to read_cycle
 .wrap
 
@@ -144,9 +171,10 @@ a2high:
     irq set 3                  ; irq3 will trigger SM3
 public entry_point:
 .wrap_target
-    wait 1 pin NTUBE_PIN       ; wait for nTUBE to go high
-    wait 0 pin NTUBE_PIN [5]   ; wait for nTUBE to go low
-                               ; delay a bit
+    wait 1 pin PHI2_PIN [tDB]  ; wait for PHI2 to go high
+                               ; delay tDB in case of noise around transition
+    wait 0 pin PHI2_PIN [tAD]  ; wait for PHI2 to go low
+                               ; delay tAD to sample address when stable
     jmp pin, a2high            ; sample the a2 pin, and set irq 2/3 accordingly
     irq set 2                  ; irq2 will trigger SM2
 .wrap
