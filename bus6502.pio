@@ -28,46 +28,46 @@
 
 .program bus6502_control0
 reset:
-    irq set 2                ; reset detected
-    wait 1 gpio NRST_PIN     ; wait for reset released
+    irq set 2                  ; reset detected
+    wait 1 gpio NRST_PIN       ; wait for reset released
 .wrap_target
 public entry_point:
 idle:
-    wait 1 gpio PHI2_PIN     ; wait for PHI2 to go high
+    wait 1 gpio PHI2_PIN       ; wait for PHI2 to go high
 
-    in pins, 1               ; right-shift nRST into ISR (bit 31)
-    in null, 31              ; right-shift a further 31 zeros so nRST is correctly aligned
-    mov x, isr               ; y = nRST
+    in pins, 1                 ; right-shift nRST into ISR (bit 31)
+    in null, 31                ; right-shift a further 31 zeros so nRST is correctly aligned
+    mov x, isr                 ; y = nRST
     set y, 1
-    jmp x!=y reset           ; if nRST != 1 then jmp to reset
+    jmp x!=y reset             ; if nRST != 1 then jmp to reset
 
-    wait 0 gpio PHI2_PIN [16]; wait for PHI2 to go low, and delay ~125ns
+    wait 0 gpio PHI2_PIN [16]  ; wait for PHI2 to go low, and delay ~125ns
 
-    jmp pin, idle            ; test nTUBE half waythrough phase1 when it should be stable
-    irq set 0                ; irq 0 indicates nTUBE has definitely been asserted
+    jmp pin, idle              ; test nTUBE half waythrough phase1 when it should be stable
+    irq set 0                  ; irq 0 indicates nTUBE has definitely been asserted
 .wrap
 
 ; SM1 - Test the RnW pin
 
 .program bus6502_control1
 read_cycle:
-    irq set 1                ; read cycle, so activate sm2 for further filtering
+    irq set 1                  ; read cycle, so activate sm2 for further filtering
 .wrap_target
 public entry_point:
-    wait 1 irq 0             ; wait for irq 0 and clear it
-    jmp pin, read_cycle      ; test the RnW bit
-    irq set 2                ; write cycle, so activate sm3 to sample the GPIOs
+    wait 1 irq 0               ; wait for irq 0 and clear it
+    jmp pin, read_cycle        ; test the RnW bit
+    irq set 2                  ; write cycle, so activate sm3 to sample the GPIOs
 .wrap
 
 ; SM2 - Test the A0 pin
 
 .program bus6502_control2
 read_cycle:
-    irq set 2                ; A0=1, so activate sm3 to sample the GPIOs
+    irq set 2                  ; A0=1, so activate sm3 to sample the GPIOs
 .wrap_target
 public entry_point:
-    wait 1 irq 1             ; wait for irq 1 and clear it
-    jmp pin, read_cycle      ; test if A0=1, and if so jmp to read_cycle
+    wait 1 irq 1               ; wait for irq 1 and clear it
+    jmp pin, read_cycle        ; test if A0=1, and if so jmp to read_cycle
 .wrap
 
 ; SM3 - Re-sample GPIOs towards the end of phase 2 and push to Tx FIFO
@@ -75,11 +75,11 @@ public entry_point:
 .program bus6502_control3
 .wrap_target
 public entry_point:
-    wait 1 irq 2             ; wait for irq 2 and clear it
-    wait 1 pin PHI2_PIN      ; wait for PHI2 pin to go high
-    wait 0 pin PHI2_PIN      ; wait for PHI2 pin to go low
-    in pins, 16              ; sample the gpio towards a the end of Phase 2
-    push                     ; push sample into the Rx FIFO
+    wait 1 irq 2               ; wait for irq 2 and clear it
+    wait 1 pin PHI2_PIN        ; wait for PHI2 pin to go high
+    wait 0 pin PHI2_PIN        ; wait for PHI2 pin to go low
+    in pins, 16                ; sample the gpio towards a the end of Phase 2
+    push                       ; push sample into the Rx FIFO
 .wrap
 
 ; ====================================================================================
@@ -120,18 +120,18 @@ public entry_point:
 
 .program bus6502_pindirs
 read_cycle:
-    mov osr, ~x              ; OSR = 0xffffffff
-    wait 1 pin PHI2_PIN      ; wait for PHI2 to go high
-    out pindirs, 8           ; start driving the databus
-    mov osr, x               ; OSR = 0x00000000
-    wait 0 pin PHI2_PIN      ; wait for PHI2 to go low
-    out pindirs, 8           ; stop driving the databus
+    mov osr, ~x                ; OSR = 0xffffffff
+    wait 1 pin PHI2_PIN        ; wait for PHI2 to go high
+    out pindirs, 8             ; start driving the databus
+    mov osr, x                 ; OSR = 0x00000000
+    wait 0 pin PHI2_PIN        ; wait for PHI2 to go low
+    out pindirs, 8             ; stop driving the databus
 public entry_point:
 .wrap_target
-    wait 1 pin NTUBE_PIN     ; wait for nTUBE to go high
-    wait 0 pin NTUBE_PIN [5] ; wait for nTUBE to go low
-                             ; delay a bit
-    jmp pin read_cycle       ; if RnW then jmp to read_cycle
+    wait 1 pin NTUBE_PIN       ; wait for nTUBE to go high
+    wait 0 pin NTUBE_PIN [5]   ; wait for nTUBE to go low
+                               ; delay a bit
+    jmp pin read_cycle         ; if RnW then jmp to read_cycle
 .wrap
 
 
@@ -141,14 +141,14 @@ public entry_point:
 
 .program bus6502_a2
 a2high:
-    irq set 3                ; irq3 will trigger SM3
+    irq set 3                  ; irq3 will trigger SM3
 public entry_point:
 .wrap_target
-    wait 1 pin NTUBE_PIN     ; wait for nTUBE to go high
-    wait 0 pin NTUBE_PIN [5] ; wait for nTUBE to go low
-                             ; delay a bit
-    jmp pin, a2high          ; sample the a2 pin, and set irq 2/3 accordingly
-    irq set 2                ; irq2 will trigger SM2
+    wait 1 pin NTUBE_PIN       ; wait for nTUBE to go high
+    wait 0 pin NTUBE_PIN [5]   ; wait for nTUBE to go low
+                               ; delay a bit
+    jmp pin, a2high            ; sample the a2 pin, and set irq 2/3 accordingly
+    irq set 2                  ; irq2 will trigger SM2
 .wrap
 
 
@@ -159,15 +159,15 @@ public entry_point:
 .program bus6502_pins
 public entry_point:
 .wrap_target
-    wait 1 irq 0 rel        ; wait on irq 2 (SM2) or irq3 (SM3)
-    in pins, 2              ; right-shift the lower A[1:0] into ISR (bits 31:30)
-    in null, 30             ; right-shift a further 30 zeros so address is correctly aligned
-    mov y, isr              ; copy 2-bit address into the y counter
-    mov isr, osr            ; copy 32-bit OSR (holding the read data) into ISR
-loop:                       ; while y != 0
-    jmp !y, done            ;
-    in null, 8              ; shift the ISR right 8-bits to select the next byte
-    jmp y--, loop           ; decrement the address counter, and loop back if non zero
+    wait 1 irq 0 rel          ; wait on irq 2 (SM2) or irq3 (SM3)
+    in pins, 2                ; right-shift the lower A[1:0] into ISR (bits 31:30)
+    in null, 30               ; right-shift a further 30 zeros so address is correctly aligned
+    mov y, isr                ; copy 2-bit address into the y counter
+    mov isr, osr              ; copy 32-bit OSR (holding the read data) into ISR
+loop:                         ; while y != 0
+    jmp !y, done              ;
+    in null, 8                ; shift the ISR right 8-bits to select the next byte
+    jmp y--, loop             ; decrement the address counter, and loop back if non zero
 done:
-    mov pins, isr           ; write the lower 8 bits of the ISR to the databus
+    mov pins, isr             ; write the lower 8 bits of the ISR to the databus
 .wrap
