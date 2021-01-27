@@ -1315,6 +1315,8 @@ l_98: // Opcode 98 - TYA
 
 l_99: // Opcode 99 - STA $0000,Y
    GET_ABY_LOCATION
+   lsl r1,r1,#16
+   lsr r1,r1,#16
    STORE_BYTE 2 rAcc
 
 l_9a: // Opcode 9A - TXS
