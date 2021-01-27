@@ -613,7 +613,9 @@ uint8_t __time_critical_func(tube_parasite_read)(uint32_t addr)
       _enable_interrupts();
       break;
    }
-   FLUSH_TUBE_REGS();
+   if (addr & 1) {
+      FLUSH_TUBE_REGS();
+   }
    return temp;
 }
 
