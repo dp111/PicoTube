@@ -235,11 +235,13 @@ r1  effective address
 .macro  GET_ABY_LOCATION // $0000,Y
    GET_ABS_LOCATION r1
    add   r1, rYreg
+   uxth  r1,r1
 .endm
 
 .macro  GET_ABX_LOCATION // $0000,X
    GET_ABS_LOCATION r1
    add   r1, rXreg
+   uxth  r1,r1
 .endm
 
 .macro load_operand_byte reg=r0
@@ -1315,8 +1317,6 @@ l_98: // Opcode 98 - TYA
 
 l_99: // Opcode 99 - STA $0000,Y
    GET_ABY_LOCATION
-   lsl r1,r1,#16
-   lsr r1,r1,#16
    STORE_BYTE 2 rAcc
 
 l_9a: // Opcode 9A - TXS
