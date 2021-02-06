@@ -9,13 +9,8 @@
  */
 
 void check_elk_mode_and_patch(unsigned char *rom, int start, int len, int expected) {
-#ifndef PICO
-   char *elk_mode_prop = get_cmdline_prop("elk_mode");
-   int elk_mode = 0; // default
-   if (elk_mode_prop) {
-      elk_mode = atoi(elk_mode_prop);
-   }
-   if (elk_mode) {
+#ifdef ELK_MODE
+
       int actual = 0;
       for (int i = start; i < start + len - 2; i++) {
          if ((rom[i] == 0x8D) && (rom[i + 1] == 0xE5) && (rom[i + 2] == 0xFE)) {
@@ -34,6 +29,5 @@ void check_elk_mode_and_patch(unsigned char *rom, int start, int len, int expect
       } else {
          LOG_WARN("Elk client ROM patching failed (expected = %d, actual = %d)\r\n", expected, actual);
       }
-   }
-   #endif
+#endif
 }
