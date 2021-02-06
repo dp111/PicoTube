@@ -27,7 +27,7 @@
 ; looking for the falling edge. It's used mostly on Phi2, which can suffer noise
 ; due to crosstalk from the data bus being driven
 ;
-; this paramater is much less critical
+; this parameter is much less critical
 
 .define tDB         16  ; 120ns
 

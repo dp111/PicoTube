@@ -1,6 +1,5 @@
 #include <inttypes.h>
 #include <string.h>
-//#include "info.h"
 #include "tube-defs.h"
 //#include "gitversion.h"
 

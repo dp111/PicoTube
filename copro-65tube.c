@@ -8,9 +8,6 @@
  * - Tom Walker
  *
  */
-#ifndef PICO
-#define PICO
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,30 +20,10 @@
 #include "programs.h"
 #include "copro-65tube.h"
 
-#ifdef HISTOGRAM
-
-unsigned int histogram_memory[0x100];
-
-void copro_65tube_init_histogram() {
-  int i;
-  for (i = 0; i < 256; i++) {
-    histogram_memory[i] = 0;
-  }
-}
-
-void copro_65tube_dump_histogram() {
-  int i;
-  for (i = 0; i < 256; i++) {
-    printf("%02x %u\r\n", i, histogram_memory[i]);
-  }
-}
-
-#endif
-
 static unsigned char *copro_65tube_poweron_reset(void) {
    // Wipe memory
    unsigned char * mpu_memory;
-   mpu_memory = copro_mem_reset(0x10000); // only need to goto 0xF800 as rom will be put in later
+   mpu_memory = copro_mem_reset(0xf800); // only need to goto 0xF800 as rom will be put in later
    // Install test programs (like sphere)
    copy_test_programs(mpu_memory);
    return mpu_memory;
@@ -66,9 +43,7 @@ static void copro_65tube_reset(unsigned char mpu_memory[]) {
 void copro_65tube_emulator() {
    // Remember the current copro so we can exit if it changes
    int last_copro = copro;
-  // unsigned char *addr;
-   //__attribute__ ((aligned (64*1024))) unsigned char mpu_memory[64*1024]; // allocate the amount of ram
-   unsigned char * mpu_memory; // now the arm vectors have moved we can set the core memory to start at 0
+    unsigned char * mpu_memory; // now the arm vectors have moved we can set the core memory to start at 0
    unsigned int i;
    // When the 65tube co pro on a single core system, switch to the alternative FIQ handler
    // that flag events from the ISR using the ip register
@@ -76,31 +51,11 @@ void copro_65tube_emulator() {
    mpu_memory = copro_65tube_poweron_reset();
    copro_65tube_reset(mpu_memory);
 
-#ifndef PICO
-     // Make page 64K point to page 0 so that accesses LDA 0xFFFF, X work without needing masking
-  map_4k_page(16, 0);
-#endif
    while (copro == last_copro) {
-#ifdef HISTOGRAM
-      copro_65tube_init_histogram();
-#endif
-      tube_reset_performance_counters();
-printf("Core start\r\n");
+
       // Copro 0/2 runs at full speed, Copro 1/3 run at specified slower speed
       exec_65tube(mpu_memory, (copro == COPRO_65TUBE_1 || copro == COPRO_65TUBE_3) ? 1 : 0);
-printf("core exit\r\n");
-      tube_log_performance_counters();
-#ifdef HISTOGRAM
-      copro_65tube_dump_histogram();
-#endif
+
       copro_65tube_reset(mpu_memory);
    }
-
-   // restore memory mapping
-#ifndef PICO
-   for ( i= 0 ; i<=16; i++ )
-     map_4k_page(i, i);
-#else
-   free(mpu_memory);
-#endif
 }

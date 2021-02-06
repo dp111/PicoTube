@@ -1,9 +1,10 @@
-/*TODO
+/*
 
-NB instructions like LDA ($00),Y don't check for wrapping around in memory
+Cortex M0 6502 emulator
 
+Changes (C) Dominic Plunkett 2020
 
-Changes for M0+ core
+Based on the code from Ed for an cortex M3 
 
  * This file is part of the a6502 project.
  *
@@ -22,11 +23,8 @@ Changes for M0+ core
  * You should have received a copy of the GNU Lesser General Public License
  * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
-//#define TRACE6502
-#include "copro-65tubeasm.h"
+
 /*
-2012-06-11  Ed Spittles  started (as outgrowth of usb_cdcacm example in libopencm3)
-  FIXME: decimal mode, of course
 
 Using deeply nested macros - can get visibility for debug using
   arm-none-eabi-gcc -E *.S > x.tmp
@@ -35,6 +33,8 @@ Using deeply nested macros - can get visibility for debug using
 r0  operand byte, opcode
 r1  effective address
 */
+#include "copro-65tubeasm.h"
+
 #define rflagsNZ   r2  /* N and Z flags      */
 #define rAcc       r3  /* a (accumulator)       */
 #define rYreg      r4  /* y index register      */

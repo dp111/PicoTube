@@ -1,6 +1,4 @@
-//#include "rpi-base.h"
 #include "tube-defs.h"
-
 #include "copro-65tubeasm.h"
 
 .text
@@ -12,37 +10,7 @@
 // =================================================
 // ISR CODE
 // =================================================
-CACHELINE_ALIGN = 5
 
-.align CACHELINE_ALIGN
-
-// ARM FIQ handler
-
-#ifndef PICO
-arm_fiq_handler_flag1:
-      ldr      r12, =MBOX0_READ        // Read the GPU mailbox
-      push     {r0-r3,lr}
-	  ldr      r10,=tube_irq
-      ldr      r0, [r12]               // Get Mailbox data
-
-      BL       tube_io_handler
-
-	  ldr      r12,[r10]
-      pop      {r0-r3,r14}
-      tst      r12, #FAST6502_BIT      // see if we should signal the 6502 Core
-      tstne    r12,#RESET_BIT+NMI_BIT+IRQ_BIT
-      orrne    copro6502asm_instruction_table, copro6502asm_instruction_table, #copro6502asm_instruction_size
-
-// fall into return
-
-// Default handlers for FIQ/IRQ do nothing
-
-arm_fiq_handler:
-
-arm_irq_handler:
-
-      subs    pc, lr, #4
-#else
 #define GPIO_IN         0x04
 #define GPIO_OUT_SET    0x14
 #define GPIO_OUT_CLR    0x18
@@ -77,15 +45,9 @@ picofifo:
       lsl   r1,#24
       LDR   r0,[r1,#FIFO_RD] // read data out of fifo
 
- //     mov   r2,#1
- //     lsl   r2,#DEBUG_PIN2
- //     STR   r2,[r1,#GPIO_OE_SET]
- //     STR   R2,[r1,#GPIO_OUT_SET]
-
       mov   r2,#15
       str   r2,[r1,#0x50] // Clear FIFO errors
 #endif
-
 
       BLX   tube_io_handler
 
@@ -103,16 +65,10 @@ picofifo:
       orr   r0,r0,r1
       mov   copro6502asm_instruction_table,r0
 
- //     mov   r2,#1
- //     lsl   r2,#DEBUG_PIN2
- //     mov   r1,#0xd0
- //     lsl   r1,#24
- //     STR   R2,[r1,#GPIO_OUT_CLR]
-
 picofifoexit:
       pop {pc}
 
-#endif
+
 // picotubecore
 //
 
@@ -127,11 +83,8 @@ picotubecore:
       lsl   r4, #24
       adr   r5, tube_regs        // Shared memory base address 8x bytes
       mov   r7, #255             // GPIO bits
-//    mov   r6,#1
-//    lsl   r6,#DEBUG_PIN1
-//    STR   r6,[r4,#GPIO_OE_SET]
+
 poll_tube_low:
- //     STR   R6,[r4,#GPIO_OUT_CLR]
 
 poll_tube_low_loop:
       ldr   r0, [r4,#GPIO_IN]    // Read GPIO
@@ -143,8 +96,6 @@ poll_tube_low_loop:
 
       LSR   r1, r0,#NTUBE_PIN+1
       BCS   poll_tube_low_loop
-
- //     STR   R6,[r4,#GPIO_OUT_SET]
 
       LSR   r1, r0,#RNW_PIN+1
       BCC   write_cycle

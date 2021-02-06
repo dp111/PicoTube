@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "tube-defs.h"
-//#include "info.h"
 
 /*
  * If the elk_mode property is non-zero then patch

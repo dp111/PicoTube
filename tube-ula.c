@@ -6,26 +6,17 @@
  * Based on code from B-em v2.2 by Tom Walker
  *
  */
-#ifndef PICO
-#define PICO
-#endif
+
 #include <stdio.h>
 #include <inttypes.h>
 #include "tube-defs.h"
 #include "tube.h"
 #include "tube-ula.h"
-#ifndef PICO
-//#include "rpi-gpio.h"
-//#include "rpi-aux.h"
-//#include "rpi-interrupts.h"
-//#include "cache.h"
-//#include "info.h"
-//#include "performance.h"
-#else
+
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "hardware/irq.h"
-#endif
+
 inline void _disable_interrupts()
 {
    __asm volatile ("cpsid i");
@@ -54,37 +45,11 @@ inline void _enable_interrupts()
 //
 // Another option if we go back to 8-bit values tube_regs is to use
 // CPG_Param0..CPG_Param1
-#ifndef PICO
-#define GPU_TUBE_REG_ADDR 0x7e0000a0
-#define ARM_TUBE_REG_ADDR ((GPU_TUBE_REG_ADDR & 0x00FFFFFF) | PERIPHERAL_BASE)
-
-//#include "tubevc.h"
-//#include "startup.h"
-#endif
 
 int test_pin;
 static int led_type=0;
-#ifndef PICO
-static volatile uint32_t *tube_regs = (uint32_t *) ARM_TUBE_REG_ADDR;
-#else
+
 extern uint8_t tube_regs[8];
-#endif
-
-#ifndef PICO
-static uint32_t host_addr_bus;
-#define HBIT_7 (1 << 25)
-#define HBIT_6 (1 << 24)
-#define HBIT_5 (1 << 23)
-#define HBIT_4 (1 << 22)
-#define HBIT_3 (1 << 11)
-#define HBIT_2 (1 << 10)
-#define HBIT_1 (1 << 9)
-#define HBIT_0 (1 << 8)
-
-#define BYTE_TO_WORD(data) ((((data) & 0x0F) << 8) | (((data) & 0xF0) << 18))
-#define WORD_TO_BYTE(data) ((((data) >> 8) & 0x0F) | (((data) << 18) & 0xF0))
-
-#else
 
 #define HBIT_7 (1 << 7)
 #define HBIT_6 (1 << 6)
@@ -98,11 +63,7 @@ static uint32_t host_addr_bus;
 #define BYTE_TO_WORD(data) (data)
 #define WORD_TO_BYTE(data) (data)
 
-#endif
-
-
 static char copro_command =0;
-//static perf_counters_t pct;
 
 static uint8_t ph1[24],ph3_1;
 static uint8_t hp1,hp2,hp3[2],hp4;
@@ -110,7 +71,6 @@ static uint8_t pstat[4];
 static uint8_t ph3pos,hp3pos;
 static uint8_t ph1rdpos,ph1wrpos,ph1len;
 volatile int tube_irq;
-
 
 // Host end of the fifos are the ones read by the tube isr
 #define PH1_0 tube_regs[1]
@@ -131,62 +91,7 @@ volatile int tube_irq;
 #define PSTAT3 pstat[2]
 #define PSTAT4 pstat[3]
 
-#ifdef DEBUG_TUBE
-
-#define  TUBE_READ_MARKER 0x80000000
-#define TUBE_WRITE_MARKER 0x40000000
-
-unsigned int tube_index;
-unsigned int tube_buffer[0x10000];
-
-void tube_dump_buffer() {
-   int i;
-   LOG_INFO("tube_index = %u\r\n", tube_index);
-   for (i = 0; i < tube_index; i++) {
-      if (tube_buffer[i] & (TUBE_READ_MARKER | TUBE_WRITE_MARKER)) {
-         if (tube_buffer[i] & TUBE_READ_MARKER) {
-            LOG_INFO("Rd R");
-         }
-         if (tube_buffer[i] & TUBE_WRITE_MARKER) {
-            LOG_INFO("Wr R");
-         }
-         // Covert address (1,3,5,7) to R1,R2,R3,R4
-         LOG_INFO("%u = %02x\r\n", 1 + ((tube_buffer[i] & 0xF00) >> 9), tube_buffer[i] & 0xFF);
-      } else {
-         LOG_INFO("?? %08x\r\n", tube_buffer[i]);
-      }
-   }
-}
-
-void tube_reset_buffer() {
-   int i;
-   tube_index = 0;
-   for (i = 0; i < 0x10000; i++) {
-      tube_buffer[i] = 0;
-   }
-}
-#endif
-/*
-static void tube_updateints_IRQ()
-{
-   // Test for IRQ
-   tube_irq = tube_irq & (0xFF - 1);
-   if ((HSTAT1 & HBIT_1) && (PSTAT1 & 128)) tube_irq  |= 1;
-   if ((HSTAT1 & HBIT_2) && (PSTAT4 & 128)) tube_irq  |= 1;
-}
-
-static void tube_updateints_NMI()
-{
-   // Test for NMI
-   tube_irq = tube_irq &(0xFF - 2);
-   if ((HSTAT1 & HBIT_3) && !(HSTAT1 & HBIT_4) && ((hp3pos > 0) || (ph3pos == 0))) tube_irq|=2;
-   if ((HSTAT1 & HBIT_3) &&  (HSTAT1 & HBIT_4) && ((hp3pos > 1) || (ph3pos == 0))) tube_irq|=2;
-}
-*/
-
-
-
-#if defined(PICO) && defined(USE_PIO)
+#if defined(USE_PIO)
 
 #include "hardware/pio.h"
 #include "bus6502.pio.h"
@@ -301,9 +206,6 @@ static inline void FLUSH_TUBE_REGS() {
 #define FLUSH_TUBE_REGS(...)
 #endif
 
-
-
-
 void tube_enable_fast6502(void)
 {
    _disable_interrupts();
@@ -338,19 +240,11 @@ void copro_command_excute(unsigned char copro_command,unsigned char val)
           return;
       case 1 : // *fx 151,226,1 followed by *fx 151,228,val
                // Select memory size
-               if (val & 128 )
-                  copro_memory_size = (val & 127 ) * 8 * 1024 * 1024;
-               else
-                  copro_memory_size = (val & 127 ) * 64 * 1024 ;
-               if (copro_memory_size > 16 *1024 * 1024)
-                  copro_memory_size = 0;
-               LOG_DEBUG("New Copro memory size = %u, %u\r\n", val, copro_memory_size);
                copro = copro | 128 ;  // Set bit 7 to signal full reset of core
                return;
       default :
           break;
     }
-
 }
 
 static void tube_reset()
@@ -624,35 +518,13 @@ uint8_t __time_critical_func(tube_parasite_read)(uint32_t addr)
 // - the bank select registers are accessed at 0xFEE0-0xFEE7
 void tube_parasite_write_banksel(uint32_t addr, uint8_t val)
 {
-   #ifndef PICO
-  if ((addr & 0xFFF8) == 0xFEF8) {
-    // Tube writes get passed on to original code
-    tube_parasite_write(addr, val);
-  } else if ((addr & 0xFFF8) == 0xFEE0) {
-     // Implement write only bank selection registers for 8x 8K pages
-     int logical = (addr & 7) << 1;
-     int physical = (val << 1);
-     map_4k_page(logical, physical);
-     map_4k_page(logical + 1, physical + 1);
-     // Page 0 must also be mapped as page 16 (64K)
-     if (logical == 0) {
-       printf("Remapping page zero!\r\n");
-       map_4k_page(16, physical);
-     }
-  }
-  #endif
+
 }
 
 void __time_critical_func(tube_parasite_write)(uint32_t addr, uint8_t val)
 {
    _disable_interrupts();
 
-#ifdef DEBUG_TUBE
-   if (addr & 1) {
-      tube_buffer[tube_index++] = TUBE_WRITE_MARKER | ((addr & 7) << 8) | val;
-      tube_index &= 0xffff;
-   }
-#endif
    switch (addr & 7)
    {
    case 1: /*Register 1*/
@@ -742,149 +614,6 @@ void __time_critical_func(tube_io_handler)(uint32_t mail)
 
 void tube_init_hardware()
 {
-   #ifndef PICO
-   int revision = get_revision();
-
-   // uuuu uuuu FMMM CCCC PPPP TTTT TTTT RRRR
-   //
-   // F = new revision code flags
-   // M = memory
-   // C = manufacturer
-   // P = processor
-   // T = type
-   // R = revision
-
-   // https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
-
-   if (revision & 0x00800000) {
-      // New revision codes, we only care about type
-      revision &= 0xFF0;
-   } else {
-      // Old revision codes were only 16 bits
-      revision &= 0xFFFF;
-   }
-
-   // early 26pin pins have a slightly different pin out
-   switch (revision)
-      {
-      case 0x02:
-      case 0x03:
-         // Write 1 to the LED init nibble in the Function Select GPIO
-         // peripheral register to enable LED pin as an output
-         RPI_GpioBase-> GPFSEL[1] |= 1<<18;
-         host_addr_bus = (A2_PIN_26PIN << 16) | (A1_PIN_26PIN << 8) | (A0_PIN_26PIN); // address bus GPIO mapping
-         RPI_SetGpioPinFunction(A2_PIN_26PIN, FS_INPUT);
-         RPI_SetGpioPinFunction(A1_PIN_26PIN, FS_INPUT);
-         RPI_SetGpioPinFunction(A0_PIN_26PIN, FS_INPUT);
-         RPI_SetGpioPinFunction(TEST_PIN_26PIN, FS_OUTPUT);
-         test_pin = TEST_PIN_26PIN;
-         break;
-
-
-      default:
-         host_addr_bus = (A2_PIN_40PIN << 16) | (A1_PIN_40PIN << 8) | (A0_PIN_40PIN); // address bus GPIO mapping
-         RPI_SetGpioPinFunction(A2_PIN_40PIN, FS_INPUT);
-         RPI_SetGpioPinFunction(A1_PIN_40PIN, FS_INPUT);
-         RPI_SetGpioPinFunction(A0_PIN_40PIN, FS_INPUT);
-         RPI_SetGpioPinFunction(TEST_PIN_40PIN, FS_OUTPUT);
-         RPI_SetGpioPinFunction(TEST2_PIN, FS_OUTPUT);
-         RPI_SetGpioPinFunction(TEST3_PIN, FS_OUTPUT);
-         test_pin = TEST_PIN_40PIN;
-         break;
-      }
-
-   // Write 1 to the LED init nibble in the Function Select GPIO
-   // peripheral register to enable LED pin as an output, and set
-   // the appropriate LED type (for the GPU code).
-   //
-   // LED type 0 is GPIO 16
-   // LED type 1 is GPIO 47
-   // LED type 2 means no LED supported (Pi 3)
-   // LED type 3 is GPIO 29
-   // LED type 4 is GPIO 42
-   switch (revision) {
-
-   case 0x02:  // rpi1 rev 1.0
-   case 0x03:  // rpi1 rev 1.0
-   case 0x04:  // rpi1 rev 2.0
-   case 0x05:  // rpi1 rev 2.0
-   case 0x06:  // rpi1 rev 2.0
-   case 0x07:  // rpi1 rev 2.0
-   case 0x08:  // rpi1 rev 2.0
-   case 0x09:  // rpi1 rev 2.0
-   case 0x0D:  // rpi1 rev 2.0
-   case 0x0E:  // rpi1 rev 2.0
-   case 0x0F:  // rpi1 rev 2.0
-      led_type = 0;
-      break;
-
-   case 0x080: // RPI 3B (no LED supported)
-      led_type = 2;
-      break;
-
-   case 0x110: // RPI 4B
-      led_type = 4;
-      RPI_GpioBase-> GPFSEL[4] |= 1<<6; // LED is GPIO 42
-      break;
-
-   case 0x0e0 : // RPI 3A+
-   case 0x0d0 : // RPI 3B+
-      led_type = 3;
-      RPI_GpioBase-> GPFSEL[2] |= 1<<27; // LED is GPIO 29
-      break;
-
-   default :
-      // All other models
-      led_type = 1;
-      RPI_GpioBase-> GPFSEL[4] |= 1<<21; // LED is GPIO 47
-      break;
-   }
-
-   // Configure our pins as inputs
-   RPI_SetGpioPinFunction(D7_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D6_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D5_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D4_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D3_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D2_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D1_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(D0_PIN, FS_INPUT);
-
-   RPI_SetGpioPinFunction(PHI2_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(NTUBE_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(NRST_PIN, FS_INPUT);
-   RPI_SetGpioPinFunction(RNW_PIN, FS_INPUT);
-
-   // Initialise the info system with cached values (as we break the GPU property interface)
-   init_info();
-
-#ifdef DEBUG
-   dump_useful_info();
-#endif
-
-   // Initialize performance counters
-#if defined(RPI2) || defined(RPI3) || defined(RPI4)
-   pct.num_counters = 6;
-   pct.type[0] = PERF_TYPE_L1I_CACHE;
-   pct.type[1] = PERF_TYPE_L1I_CACHE_REFILL;
-   pct.type[2] = PERF_TYPE_L1D_CACHE;
-   pct.type[3] = PERF_TYPE_L1D_CACHE_REFILL;
-   pct.type[4] = PERF_TYPE_L2D_CACHE_REFILL;
-   pct.type[5] = PERF_TYPE_INST_RETIRED;
-   pct.counter[0] = 0;
-   pct.counter[1] = 0;
-   pct.counter[2] = 0;
-   pct.counter[3] = 0;
-   pct.counter[4] = 0;
-   pct.counter[5] = 0;
-#else
-   pct.num_counters = 2;
-   pct.type[0] = PERF_TYPE_I_CACHE_MISS;
-   pct.type[1] = PERF_TYPE_D_CACHE_MISS;
-   pct.counter[0] = 0;
-   pct.counter[1] = 0;
-#endif
-#else
 
 #ifdef USE_PIO
    pio_init(pio0, pio1, 0);
@@ -906,25 +635,17 @@ void tube_init_hardware()
    gpio_init(PHI2_PIN);
 #endif
 
-   gpio_init(18);
-   gpio_init(20);
-#endif
+   //gpio_init(18);
+   //gpio_init(20);
+
    hp1 = hp2 = hp4 = hp3[0]= hp3[1]=0;
 
 }
 
 int tube_is_rst_active() {
-#ifndef PICO
-   return ((RPI_GpioBase->GPLEV0 & NRST_MASK) == 0) ;
-#else
    return (gpio_get(NRST_PIN)==0);
-#endif
 }
-#if 0
-static void tube_wait_for_rst_active() {
-   while (!tube_is_rst_active());
-}
-#endif
+
 // Debounce RST
 
 // On my Model B the characterisc of RST bounce on release is a burst
@@ -957,31 +678,9 @@ void tube_wait_for_rst_release() {
 }
 
 void tube_reset_performance_counters() {
-   #ifndef PICO
-   reset_performance_counters(&pct);
-   #endif
 }
 
 void tube_log_performance_counters() {
-#ifdef DEBUG_TUBE
-   // Dump tube buffer
-   tube_dump_buffer();
-   // Reset the tube buffer
-   tube_reset_buffer();
-#endif
-#ifdef DEBUG
-   read_performance_counters(&pct);
-   print_performance_counters(&pct);
-#endif
-   LOG_DEBUG("tube reset - copro %u\r\n", copro);
-#ifdef DEBUG_TRANSFERS
-   LOG_INFO("checksum_h = %08"PRIX32" %08"PRIX32"\r\n", count_h, checksum_h);
-   LOG_INFO("checksum_p = %08"PRIX32" %08"PRIX32"\r\n", count_p, checksum_p);
-   checksum_h = 0;
-   checksum_p = 0;
-   count_h = 0;
-   count_p = 0;
-#endif
 }
 
 void disable_tube() {
@@ -992,47 +691,8 @@ void disable_tube() {
    }
 }
 
-void start_vc_ula()
+void start_ula()
 {
-   #ifndef PICO
-   int func,r0,r1, r2,r3,r4,r5;
-   extern int tube_delay;
-   func = (int) &tubevc_asm[0];
-   r0   = (int) GPU_TUBE_REG_ADDR;       // address of tube register block in IO space
-   r1   = led_type;
-   r2   = tube_delay;
-
-   r3   = host_addr_bus;
-   r4   = 0;
-   r5   = 1<<test_pin;                     // test pin
-
-#ifdef DEBUG_GPU
-   LOG_DEBUG("Staring VC ULA\r\n");
-   LOG_DEBUG("VidCore code = %08x\r\n", func);
-   LOG_DEBUG("VidCore   r0 = %08x\r\n", r0);
-   LOG_DEBUG("VidCore   r1 = %08x\r\n", r1);
-   LOG_DEBUG("VidCore   r2 = %08x\r\n", r2);
-   LOG_DEBUG("VidCore   r3 = %08x\r\n", r3);
-   LOG_DEBUG("VidCore   r4 = %08x\r\n", r4);
-   LOG_DEBUG("VidCore   r5 = %08x\r\n", r5);
-#endif
-   RPI_PropertyInit();
-   RPI_PropertyAddTag(TAG_EXECUTE_CODE,func,r0,r1,r2,r3,r4,r5);
-   RPI_PropertyProcessNoCheck();
-// for (r0 = 0x7E002000; r0 < 0x7E003000; r0+= 4) {
-//    rpi_mailbox_property_t *buf;
-//    RPI_PropertyInit();
-//    RPI_PropertyAddTag(TAG_EXECUTE_CODE,func,r0,r1,r2,r3,r4,r5);
-//    RPI_PropertyProcess();
-//    buf = RPI_PropertyGet(TAG_EXECUTE_CODE);
-//    if (buf) {
-//       LOG_DEBUG("%08x %08x\r\n", r0, buf->data.buffer_32[0]);
-//    } else {
-//       LOG_DEBUG("%08x ?\r\n", r0);
-//    }
-// }
-#else
-
 #ifdef USE_PIO
    irq_set_exclusive_handler(PIO0_IRQ_0, picofifo);
    irq_set_enabled(PIO0_IRQ_0, true);
@@ -1043,5 +703,4 @@ void start_vc_ula()
    irq_set_enabled(SIO_IRQ_PROC0, true);
 #endif
 
-#endif
 }
