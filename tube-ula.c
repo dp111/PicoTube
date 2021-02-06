@@ -677,12 +677,6 @@ void tube_wait_for_rst_release() {
    tube_reset();
 }
 
-void tube_reset_performance_counters() {
-}
-
-void tube_log_performance_counters() {
-}
-
 void disable_tube() {
    int i;
    tube_irq &= ~TUBE_ENABLE_BIT;

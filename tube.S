@@ -97,6 +97,13 @@ poll_tube_low_loop:
       LSR   r1, r0,#NTUBE_PIN+1
       BCS   poll_tube_low_loop
 
+// lets check we haven't got a glitch
+      ldr   r0, [r4,#GPIO_IN]    // Read GPIO
+      LSR   r1, r0,#PHI2_PIN+1
+      BCC   poll_tube_low_loop
+      LSR   r1, r0,#NTUBE_PIN+1
+      BCS   poll_tube_low_loop
+
       LSR   r1, r0,#RNW_PIN+1
       BCC   write_cycle
 
@@ -139,6 +146,11 @@ wrloop:
 write_cycle:
       ldr   r0, [r4,#GPIO_IN]  // Read GPIO
       LSR   r1, r0,#PHI2_PIN+1
+      BCS   write_cycle
+
+      // check clock edge is real and not a glitch
+      ldr   r1, [r4,#GPIO_IN]  // Read GPIO
+      LSR   r1, r1,#PHI2_PIN+1
       BCS   write_cycle
 
       str   r0, [r4,#FIFO_WR] // FIFO
