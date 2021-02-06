@@ -171,14 +171,14 @@
 #define TEST3_MASK   (1 << TEST3_PIN)
 #else
 
-#define D7_PIN       (7)    
-#define D6_PIN       (6)    
-#define D5_PIN       (5)    
-#define D4_PIN       (4)    
-#define D3_PIN       (3)   
-#define D2_PIN       (2)  
-#define D1_PIN       (1)    
-#define D0_PIN       (0)    
+#define D7_PIN       (7)
+#define D6_PIN       (6)
+#define D5_PIN       (5)
+#define D4_PIN       (4)
+#define D3_PIN       (3)
+#define D2_PIN       (2)
+#define D1_PIN       (1)
+#define D0_PIN       (0)
 
 #define A2_PIN       (10)
 #define A1_PIN       (9)

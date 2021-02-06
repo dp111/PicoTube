@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.12)
 include(pico_sdk_import.cmake)
-#project(PicoTube)
-#add_pico_sdk_targets()
+
+project(PicoTube)
+pico_sdk_init()
+
 add_definitions(-DPICO=1)
 add_definitions(-DUSE_MEMORY_POINTER=1)
+add_definitions(-DUSE_PIO=1)
 
 add_executable(PicoTube
     tube-client.c
@@ -26,7 +29,10 @@ add_executable(PicoTube
     tuberom_6502.c
     tuberom_6502.h
 )
-target_link_libraries( PicoTube pico_stdlib pico_multicore)
+
+pico_generate_pio_header(PicoTube ${CMAKE_CURRENT_LIST_DIR}/bus6502.pio)
+
+target_link_libraries( PicoTube pico_stdlib pico_multicore hardware_pio)
 pico_add_extra_outputs(PicoTube)
 #pico_set_binary_type(PicoTube copy_to_ram)
 

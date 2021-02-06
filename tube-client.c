@@ -29,7 +29,7 @@ extern int test_pin;
 #ifdef PICO
 #ifndef DEFAULT_COPRO
 #define DEFAULT_COPRO 0
-#endif 
+#endif
 #include "copro-65tube.h"
 //#include "copro-arm2.h"
 #include "copro-null.h"
@@ -435,14 +435,20 @@ void main(void)
 #define UART_RX_PIN 17
 
     set_sys_clock_khz( 133* 1000, false);
+
+#if 0
     // Set up our UART with the required speed.
     uart_init(UART_ID, BAUD_RATE);
-
     // Set the TX and RX pins by using the function select on the GPIO
     // Set datasheet for more information on function select
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+#endif
+
+    stdio_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
+
     printf("PicoTube\r\n");
+
 #endif
    tube_init_hardware();
 
@@ -460,7 +466,7 @@ void main(void)
   benchmark();
 #endif
 
-   
+
 #ifdef HAS_MULTICORE
   LOG_DEBUG("main running on core %u\r\n", _get_core());
   start_core(1, _spin_core);

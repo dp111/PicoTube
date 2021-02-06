@@ -1,0 +1,202 @@
+; Define the relative pin numbers
+
+.define DATA_PIN     0
+.define ADDR_PIN     8
+.define RNW_PIN     11
+.define NRST_PIN    12
+.define NTUBE_PIN   13
+.define PHI2_PIN    14
+
+; tAD is the delay in between the falling edge of Phi2 and NTUBE/A/RnW being sampled
+;
+; this parameter is critial
+; - too low and you potentially miss ntube (which can lag phi2 by ~100ns)
+; - too high and you erode the read data setup time
+;
+; for my SY6502A 20 seems to work, 16 will often crash in tube elite
+; for my UM6502CE 16 seems to work, 20 will often crash in tube elite
+;
+; Possibly noise is worse in my environment because I'm currently using a tube silencer
+; and a breadboard. Grounding is particulaly poor. The address bus suffers glitches in
+; in the middle of the cycle
+;
+
+.define tAD         20  ; 150ns
+
+; tDB is the delay between the rising edge of a signal and when it's safe to start
+; looking for the falling edge. It's used mostly on Phi2, which can suffer noise
+; due to crosstalk from the data bus being driven
+;
+; this paramater is much less critical
+
+.define tDB         16  ; 120ns
+
+; ====================================================================================
+; PIO 0
+;
+; Detect a tube access and place a sample of the GPIO bits in the Tx FIFO (of SM3)
+;
+; In a bit more detail:
+; - SM0 - Detect a genuine tube access (include deglitching nTUBE) or nRST
+; - SM1 - Test the RnW pin (to allow some reads to be filtered out)
+; - SM2 - Test the A0 pin (to allow status reads to be filtered out)
+; - SM3 - Re-sample GPIOs towards the end of phase 2 and push to Tx FIFO
+;
+; All GPIOs are used as inputs; nothing is driven back
+;
+; (11 + 4 + 3 + 5 = 23 instructions)
+;
+; ====================================================================================
+
+; SM0 - Detect a genuine tube access (include deglitching nTUBE) or nRST
+
+.program bus6502_control0
+reset:
+    irq set 2                  ; reset detected
+    wait 1 gpio NRST_PIN       ; wait for reset released
+.wrap_target
+public entry_point:
+idle:
+    wait 1 gpio PHI2_PIN [tDB] ; wait for PHI2 to go high
+                               ; delay tDB to sample nRST away from when data bus changing to avoid crosstalk
+
+    in pins, 1                 ; right-shift nRST into ISR (bit 31)
+    in null, 31                ; right-shift a further 31 zeros so nRST is correctly aligned
+    mov x, isr                 ; y = nRST
+    set y, 1
+    jmp x!=y reset             ; if nRST != 1 then jmp to reset
+
+    wait 0 gpio PHI2_PIN [tAD] ; wait for PHI2 to go low
+                               ; delay tAD to sample nTUBE when stable
+
+    jmp pin, idle              ; test nTUBE half waythrough phase1 when it should be stable
+    irq set 0                  ; irq 0 indicates nTUBE has definitely been asserted
+.wrap
+
+; SM1 - Test the RnW pin
+
+.program bus6502_control1
+read_cycle:
+    irq set 1                  ; read cycle, so activate sm2 for further filtering
+.wrap_target
+public entry_point:
+    wait 1 irq 0               ; wait for irq 0 and clear it
+    jmp pin, read_cycle        ; test the RnW bit
+    irq set 2                  ; write cycle, so activate sm3 to sample the GPIOs
+.wrap
+
+; SM2 - Test the A0 pin
+
+.program bus6502_control2
+read_cycle:
+    irq set 2                  ; A0=1, so activate sm3 to sample the GPIOs
+.wrap_target
+public entry_point:
+    wait 1 irq 1               ; wait for irq 1 and clear it
+    jmp pin, read_cycle        ; test if A0=1, and if so jmp to read_cycle
+.wrap
+
+; SM3 - Re-sample GPIOs towards the end of phase 2 and push to Tx FIFO
+
+.program bus6502_control3
+.wrap_target
+public entry_point:
+    wait 1 irq 2               ; wait for irq 2 and clear it
+    wait 1 pin PHI2_PIN [tDB]  ; wait for PHI2 pin to go high
+                               ; delay tDB in case of noise around transition
+    wait 0 pin PHI2_PIN        ; wait for PHI2 pin to go low
+    in pins, 16                ; sample the gpio towards a the end of Phase 2
+    push                       ; push sample into the Rx FIFO
+.wrap
+
+; ====================================================================================
+; PIO 1
+;
+; Detect a tube read cycle and drive the data bus with a local copy of tube_regs
+;
+; In a bit more detail:
+; - SM0 - Detect a tube read cycle and update D[7:0] pindirs to drive during phase2
+; - SM1 - Detect a tube access, sample A2 and trigger SM2 or SM3 depending on the value
+; - SM2 - Sample A[1:0] and select one of 4 bytes in the 32-bit OSR to output on D[7:0]
+; - SM3 - Sample A[1:0] and select one of 4 bytes in the 32-bit OSR to output on D[7:0]
+;
+; Data Bus GPIOs are reconfigured as outputs during Phi2
+;
+; The decision to drive the data bus is made by SM0 (which controls the data pin direction)
+;
+; The data that will be driven is selected by SM1/SM2/SM3. For simplicity, this is done
+; every 6502 cycle, but the results are only used during cycles that are tube reads
+; (i.e. when the data bus is actually driven)
+;
+; The read data for tube_regs 0..3 are stored in the 32-bit OSR on SM2
+; The read data for tube_regs 4..7 are stored in the 32-bit OSR on SM3
+;
+; These copies are kept in sync with the C tube_regs[] by FLUSH_TUBE_REGS() in tube-ula.c
+; Any time there is a change to tube_regs[], the copy held in the OSR in SM2/3 is refreshed
+; by writing to the TX FIFOs and then injecting a pull instriction into SM2/3.
+;
+; The process to select a byte from the OSR is non-destructive (i.e. it doesn't change the OSR)
+;
+; (9 + 5 + 9 = 23 instructions)
+;
+; ====================================================================================
+
+
+; SM0 - Detect a tube read cycle and update D[7:0] pindirs to drive during phase2
+; (x is set to 0 on reset)
+; TODO - find a way to deglitch NTUBE
+
+.program bus6502_pindirs
+read_cycle:
+    mov osr, ~x                ; OSR = 0xffffffff
+    wait 1 pin PHI2_PIN        ; wait for PHI2 to go high
+    out pindirs, 8             ; start driving the databus
+    mov osr, x                 ; OSR = 0x00000000
+    wait 0 pin PHI2_PIN        ; wait for PHI2 to go low
+    out pindirs, 8             ; stop driving the databus
+public entry_point:
+.wrap_target
+    wait 1 pin NTUBE_PIN [tDB] ; wait for nTUBE to go high
+                               ; delay tDB in case of noise around transition
+    wait 0 pin NTUBE_PIN       ; wait for nTUBE to go low
+    jmp pin read_cycle         ; if RnW then jmp to read_cycle
+.wrap
+
+
+; SM1 - Detect a tube access, sample A2 and trigger SM2 or SM3 depending on the value
+;   If a2=0 then set irq 2 to trigger the pins program running on SM2
+;   If a2=1 then set irq 3 to trigger the pins program running on SM3
+
+.program bus6502_a2
+a2high:
+    irq set 3                  ; irq3 will trigger SM3
+public entry_point:
+.wrap_target
+    wait 1 pin PHI2_PIN [tDB]  ; wait for PHI2 to go high
+                               ; delay tDB in case of noise around transition
+    wait 0 pin PHI2_PIN [tAD]  ; wait for PHI2 to go low
+                               ; delay tAD to sample address when stable
+    jmp pin, a2high            ; sample the a2 pin, and set irq 2/3 accordingly
+    irq set 2                  ; irq2 will trigger SM2
+.wrap
+
+
+; SM2/SM3 - Sample A[1:0] and select one of 4 bytes in the 32-bit OSR to output on D[7:0]
+;
+; SM2/SM3 are running the same program, but triggered with different irq bits
+
+.program bus6502_pins
+public entry_point:
+.wrap_target
+    wait 1 irq 0 rel          ; wait on irq 2 (SM2) or irq3 (SM3)
+    in pins, 2                ; right-shift the lower A[1:0] into ISR (bits 31:30)
+    in null, 30               ; right-shift a further 30 zeros so address is correctly aligned
+    mov y, isr                ; copy 2-bit address into the y counter
+    mov isr, osr              ; copy 32-bit OSR (holding the read data) into ISR
+loop:                         ; while y != 0
+    jmp !y, done              ;
+    in null, 8                ; shift the ISR right 8-bits to select the next byte
+    jmp y--, loop             ; decrement the address counter, and loop back if non zero
+done:
+    mov pins, isr             ; write the lower 8 bits of the ISR to the databus
+.wrap

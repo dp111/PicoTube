@@ -199,7 +199,7 @@ r1  effective address
    ADD   r1, r1, #1
    ldrb  r1, [r1, rmem]
    LSL   r1, r1, #8
-   orr   r1, r0  
+   orr   r1, r0
 .endm
 
 .macro GET_ABS_LOCATION reg=r1
@@ -414,7 +414,7 @@ r1  effective address
    lsl  r1,#1
    add  r1,#1
 1:
-   add   r1,rmem   
+   add   r1,rmem
 .endif
    mov   rSP, r1
 .endm
@@ -429,7 +429,7 @@ r1  effective address
 .macro NEXT_INSTRUCTION inc align=align
    ldrb  r0, [rPC, #\inc]
    add   rPC, #\inc+1    @ no auto increment in thumb
-   
+
 #ifdef TRACE6502
    BL   trace6502code
 #else
@@ -533,7 +533,7 @@ r1  effective address
 .else
    sub   rflagsNZ, \reg, r0
 .endif
-   SET_FLAGS_NZ rflagsNZ // setup N flag nb needed because 255-1 
+   SET_FLAGS_NZ rflagsNZ // setup N flag nb needed because 255-1
    SAVE_CARRY
    NEXT_INSTRUCTION \inc
 .endm
@@ -586,7 +586,7 @@ r1  effective address
    CLEARV_PART2
    lsl   r0, r0, #24
    lsl   rAcc, rAcc, #24
-   SETUP_CARRY 
+   SETUP_CARRY
    sbc   rAcc, rAcc, r0
    SAVE_VFLAG_FAST
    SAVE_CARRY
@@ -610,8 +610,8 @@ r1  effective address
    INSTALIGN
 .endm
 
-// BIT 
-// flags N bit = bit7 
+// BIT
+// flags N bit = bit7
 //       v bit = bit 6
 // flags Z bit = r0 & ACC
 
@@ -621,7 +621,7 @@ r1  effective address
    mov   rflagsNZ, rPbyteLo
    bic   rflagsNZ, rflagsNZ, r1  // clear Vflag
    and   r1,r1,r0  // get bit 6
-   orr   rflagsNZ, r1 
+   orr   rflagsNZ, r1
    mov   rPbyteLo, rflagsNZ
 
    LSR   rflagsNZ, R0, #7 // set up N flag
@@ -651,7 +651,7 @@ l_02:
 
 l_03:
    NOP 0
- 
+
 l_04: // Opcode 04 - TSB $00
    LOAD_ZP
    CLEAR_ZFLAG
@@ -732,9 +732,9 @@ l_14: // Opcode 14 - TRB $00
    LOAD_ZP
    CLEAR_ZFLAG
    tst   r0, rAcc
-   beq   l_14_exit    // if zero there is no need to update the byte 
+   beq   l_14_exit    // if zero there is no need to update the byte
    add   rflagsNZ, #1
-   bic   r0, rAcc 
+   bic   r0, rAcc
    STORE_BYTE_ONLY
 l_14_exit:
    NEXT_INSTRUCTION 1
@@ -933,10 +933,10 @@ l_3f: // Opcode 3F - BBR3
    BBR 3
 
 l_40: // Opcode 40 - RTI
-   mov   r0, rSP 
+   mov   r0, rSP
    ldrb  rCarry, [r0, #1]
    ldrb  rPC, [r0, #2]  @ ignore case of wrapping
-   ldrb  r1, [r0, #3]   @ ignore case of wrapping 
+   ldrb  r1, [r0, #3]   @ ignore case of wrapping
    add   r0, #3
    mov   rSP, r0
    LSL   r1, #8
@@ -1156,7 +1156,7 @@ l_72: // Opcode 72 - ADC ($00)
    ADC6 1
 
 l_73:
-   NOP 0 
+   NOP 0
 
 l_74: // Opcode 74 - STZ $00,X
    GET_ZPX_LOCATION
@@ -1641,7 +1641,7 @@ l_e0: // Opcode E0 - CPX #$00
 
 l_e1: // Opcode E1 - SBC ($00,X)
    LOAD_INX
-   SBC6 1 
+   SBC6 1
 
 l_e2:
    NOP 1
@@ -1795,7 +1795,7 @@ tablend:
    ldrb  r0, [r0]
 
    sub   rPC, rPC, #1        // set the instruction back as we haven't executed it
- 
+
    lsl   r0,r0,#29
    lsr   r0,r0,#29-2 // and the 3 bits and multiply by 4
    adr   r1,0f
@@ -1803,14 +1803,14 @@ tablend:
    bx    r0
 .align
 0:
-   .word    handle_nextinstruction+1    
+   .word    handle_nextinstruction+1
    .word    handle_irq+1
    .word    handle_nmi+1
    .word    handle_nmi+1
-   .word    exec_65tube_exit +1 
-   .word    exec_65tube_exit +1 
-   .word    exec_65tube_exit +1 
-   .word    exec_65tube_exit +1 
+   .word    exec_65tube_exit +1
+   .word    exec_65tube_exit +1
+   .word    exec_65tube_exit +1
+   .word    exec_65tube_exit +1
    .ltorg
    INSTALIGN
 .endr
@@ -2163,22 +2163,22 @@ adc_decimal:
    CLEARV_PART2
    lsl   r1,rAcc,#28
    lsr   r1,#28 // Get lower nibble only
-   
+
    lsl   rflagsNZ,r0,#28
    lsr   rflagsNZ, rflagsNZ, #28// get other lower nibble
 
    lsr   rAcc,#4  // prep upper nibble
-   lsl   rAcc,#28 
+   lsl   rAcc,#28
 
    lsl   r0, r0, #24
 
    SETUP_CARRY rCarry // recover Carry
    adc   r1,rflagsNZ
    cmp   r1,#10
-   bcc   adc_firstnibble_carry1   // lower than 10 
+   bcc   adc_firstnibble_carry1   // lower than 10
 
    sub   r1,#10
-   
+
    mov   rflagsNZ,#0xF
    and   r1,rflagsNZ // <- lower nibble
 
@@ -2215,22 +2215,22 @@ adc_decimal2:
    CLEARV_PART2
    lsl   r1,rAcc,#28
    lsr   r1,#28 // Get lower nibble only
-   
+
    lsl   rflagsNZ,r0,#28
    lsr   rflagsNZ, rflagsNZ, #28// get other lower nibble
 
    lsr   rAcc,#4  // prep upper nibble
-   lsl   rAcc,#28 
+   lsl   rAcc,#28
 
    lsl   r0, r0, #24
 
    SETUP_CARRY rCarry // recover Carry
    adc   r1,rflagsNZ
    cmp   r1,#10
-   bcc   adc_firstnibble_carry2   // lower than 10 
+   bcc   adc_firstnibble_carry2   // lower than 10
 
    sub   r1,#10
-   
+
    mov   rflagsNZ,#0xF
    and   r1,rflagsNZ // <- lower nibble
 
@@ -2266,27 +2266,27 @@ adc_skip_carry2:
 sbc_decimal :
    CLEARV_PART2
    push_r r5
-   lsl   r1,rAcc,#28   
+   lsl   r1,rAcc,#28
    LSL   r5,r0,#28
 
    SETUP_CARRY rflagsNZ
    sbc   r1,r1,r5
-   adc   r1,r1,r1   // save the carry for later 
+   adc   r1,r1,r1   // save the carry for later
 
    lsl   rAcc,rAcc,#24 // 0xaa000000
-   LSL   r0,r0,#24     // 0xzn000000  
+   LSL   r0,r0,#24     // 0xzn000000
 
    SETUP_CARRY rflagsNZ
    sbc   rAcc,rAcc,r0
-   
-   SAVE_VFLAG_FAST rflagsNZ 
-   SAVE_CARRY  // corrupts carry flag 
-   
+
+   SAVE_VFLAG_FAST rflagsNZ
+   SAVE_CARRY  // corrupts carry flag
+
    lsr   rAcc,rAcc,#24
-   
+
    SETUP_CARRY rflagsNZ
    bcs   sbc_fixup1
-   sub   rAcc,rAcc,#0x60 
+   sub   rAcc,rAcc,#0x60
 sbc_fixup1:
 
    LSR r1,#1
@@ -2300,27 +2300,27 @@ sbc_positive1:
 sbc_decimal2:
    CLEARV_PART2
    push_r r5
-   lsl   r1,rAcc,#28   
+   lsl   r1,rAcc,#28
    LSL   r5,r0,#28
 
    SETUP_CARRY rflagsNZ
    sbc   r1,r1,r5
-   adc   r1,r1,r1   // save the carry for later 
+   adc   r1,r1,r1   // save the carry for later
 
    lsl   rAcc,rAcc,#24 // 0xaa000000
-   LSL   r0,r0,#24     // 0xzn000000  
+   LSL   r0,r0,#24     // 0xzn000000
 
    SETUP_CARRY rflagsNZ
    sbc   rAcc,rAcc,r0
-   
+
    SAVE_VFLAG_FAST rflagsNZ
-   SAVE_CARRY  // corrupts carry flag 
-   
+   SAVE_CARRY  // corrupts carry flag
+
    lsr   rAcc,rAcc,#24
-   
+
    SETUP_CARRY rflagsNZ
    bcs   sbc_fixup2
-   sub   rAcc, #0x60 
+   sub   rAcc, #0x60
 sbc_fixup2:
 
    LSR   r1, #1
@@ -2446,48 +2446,48 @@ lockup:
    bl    printspace
    pop {r0-r3}
 
-   push {r0-r3} 
+   push {r0-r3}
    ldrb  r0,[rPC,#0]
    bl    printhex8
    bl    printspace
    pop {r0-r3}
 
-   push {r0-r3} 
+   push {r0-r3}
    ldrb  r0,[rPC,#1]
    bl    printhex8
    bl    printspace
    bl    printspace
-   pop {r0-r3} 
-   
+   pop {r0-r3}
+
 // Print text version instruction
 
-   push {r0-r3} 
+   push {r0-r3}
    mov  r0,rAcc
    bl    printhex8
    bl    printspace
-   pop {r0-r3} 
+   pop {r0-r3}
 
-   push {r0-r3} 
+   push {r0-r3}
    mov  r0,rXreg
    bl    printhex8
    bl    printspace
-   pop {r0-r3} 
+   pop {r0-r3}
 
-   push {r0-r3} 
+   push {r0-r3}
    mov  r0,rYreg
    bl    printhex8
    bl    printspace
-   pop {r0-r3} 
+   pop {r0-r3}
 
    statustoR0
    bl    printhex8
-   bl    printspace 
+   bl    printspace
 
    mov   r0,rSP
    sub   r0,r0,rmem
    bl    printhex8
    bl    printspace
-    
+
    printnlcr
 
    pop {r0-r3}
@@ -2503,7 +2503,7 @@ printhex16:
    mov r0,r1
    bl printhex8
    pop  {r0-r1,pc}
-   
+
 printhex8:
    push {r0-r1,r14}
    mov r1,r0

@@ -83,6 +83,7 @@ static uint32_t host_addr_bus;
 
 #define BYTE_TO_WORD(data) ((((data) & 0x0F) << 8) | (((data) & 0xF0) << 18))
 #define WORD_TO_BYTE(data) ((((data) >> 8) & 0x0F) | (((data) << 18) & 0xF0))
+
 #else
 
 #define HBIT_7 (1 << 7)
@@ -96,6 +97,7 @@ static uint32_t host_addr_bus;
 
 #define BYTE_TO_WORD(data) (data)
 #define WORD_TO_BYTE(data) (data)
+
 #endif
 
 
@@ -181,6 +183,127 @@ static void tube_updateints_NMI()
    if ((HSTAT1 & HBIT_3) &&  (HSTAT1 & HBIT_4) && ((hp3pos > 1) || (ph3pos == 0))) tube_irq|=2;
 }
 */
+
+
+
+#if defined(PICO) && defined(USE_PIO)
+
+#include "hardware/pio.h"
+#include "bus6502.pio.h"
+
+#define NUM_PINS 15
+
+static void pio_init(PIO p0, PIO p1, uint pin) {
+
+   // Load the Control program
+   uint offset_control0 = pio_add_program(p0, &bus6502_control0_program);
+   uint offset_control1 = pio_add_program(p0, &bus6502_control1_program);
+   uint offset_control2 = pio_add_program(p0, &bus6502_control2_program);
+   uint offset_control3 = pio_add_program(p0, &bus6502_control3_program);
+
+   // Load the PINDIRS program
+   uint offset_pindirs = pio_add_program(p1, &bus6502_pindirs_program);
+
+   // Load the PINS program
+   uint offset_pins = pio_add_program(p1, &bus6502_pins_program);
+
+   // Load the READ program
+   uint offset_a2 = pio_add_program(p1, &bus6502_a2_program);
+
+   // Set the GPIO Function Select to connect the pin to the PIO
+   for (uint i = 0; i < NUM_PINS; i++) {
+      pio_gpio_init(p0, pin + i);
+      pio_gpio_init(p1, pin + i);
+   }
+
+   // Set the default pindirs of all state machines to input
+   for (uint sm = 0; sm < 4; sm++) {
+      pio_sm_set_consecutive_pindirs(p0, sm, pin, NUM_PINS, false);
+      pio_sm_set_consecutive_pindirs(p1, sm, pin, NUM_PINS, false);
+   }
+
+   // Configure P0 / SM0 (the control state machine)
+   pio_sm_config c00 = bus6502_control0_program_get_default_config(offset_control0);
+   sm_config_set_in_pins (&c00, pin + 12); // mapping for IN and WAIT (nRST)
+   sm_config_set_jmp_pin (&c00, pin + 13); // mapping for JMP (nTUBE)
+   sm_config_set_in_shift(&c00, true, false, 0); // shift right, no auto push
+   pio_sm_init(p0, 0, offset_control0 + bus6502_control0_offset_entry_point, &c00);
+
+   // Configure P0 / SM1 (the control state machine)
+   pio_sm_config c01 = bus6502_control1_program_get_default_config(offset_control1);
+   sm_config_set_in_pins (&c01, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&c01, pin + 11); // mapping for JMP (RnW)
+   pio_sm_init(p0, 1, offset_control1 + bus6502_control1_offset_entry_point, &c01);
+
+   // Configure P0 / SM2 (the control state machine)
+   pio_sm_config c02 = bus6502_control2_program_get_default_config(offset_control2);
+   sm_config_set_in_pins (&c02, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&c02, pin + 8 ); // mapping for JMP (A0)
+   pio_sm_init(p0, 2, offset_control2 + bus6502_control2_offset_entry_point, &c02);
+
+   // Configure P0 / SM3 (the control state machine)
+   pio_sm_config c03 = bus6502_control3_program_get_default_config(offset_control3);
+   sm_config_set_in_pins (&c03, pin     ); // mapping for IN and WAIT
+   sm_config_set_in_shift(&c03, false, false, 0); // shift left, no auto push
+   sm_config_set_fifo_join(&c03, PIO_FIFO_JOIN_RX);
+   pio_sm_init(p0, 3, offset_control3 + bus6502_control3_offset_entry_point, &c03);
+
+   // Configure P1 / SM0 (the Read state machine, detecting a2)
+   pio_sm_config p1c0 = bus6502_a2_program_get_default_config(offset_a2);
+   sm_config_set_in_pins (&p1c0, pin     ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&p1c0, pin + 10); // mapping for JMP (A2)
+   pio_sm_init(p1, 0, offset_a2 + bus6502_a2_offset_entry_point, &p1c0);
+
+   // Configure P1 / SM1 (the PINDIRS state machine controlling the direction of D7:0)
+   pio_sm_config p1c1 = bus6502_pindirs_program_get_default_config(offset_pindirs);
+   sm_config_set_in_pins (&p1c1, pin       ); // mapping for IN and WAIT
+   sm_config_set_jmp_pin (&p1c1, pin + 11  ); // mapping for JMP (RnW)
+   sm_config_set_out_pins(&p1c1, pin,     8); // mapping for OUT (D7:0)
+   pio_sm_init(p1, 1, offset_pindirs + bus6502_pindirs_offset_entry_point, &p1c1);
+
+   // Configure P1 / SM2 (the PIN state machine controlling the data output to D7:0)
+   pio_sm_config p1c2 = bus6502_pins_program_get_default_config(offset_pins);
+   sm_config_set_in_pins (&p1c2, pin + 8   ); // mapping for IN and WAIT (A1:0)
+   sm_config_set_out_pins(&p1c2, pin,     8); // mapping for OUT (D7:0)
+   sm_config_set_in_shift(&p1c2, true, false, 0); // shift right, no auto push
+   pio_sm_init(p1, 2, offset_pins + bus6502_pins_offset_entry_point, &p1c2);
+
+   // Configure P1/ SM3 (the PIN state machine controlling the data output to D7:0)
+   pio_sm_config p1c3 = bus6502_pins_program_get_default_config(offset_pins);
+   sm_config_set_in_pins (&p1c3, pin + 8   ); // mapping for IN and WAIT (A1:0)
+   sm_config_set_out_pins(&p1c3, pin,     8); // mapping for OUT (D7:0)
+   sm_config_set_in_shift(&p1c3, true, false, 0); // shift right, no auto push
+   pio_sm_init(p1, 3, offset_pins + bus6502_pins_offset_entry_point, &p1c3);
+
+   // Enable all the state machines
+   for (uint sm = 0; sm < 4; sm++) {
+      pio_sm_set_enabled(p0, sm, true);
+   }
+   for (uint sm = 0; sm < 4; sm++) {
+      pio_sm_set_enabled(p1, sm, true);
+   }
+}
+
+static inline void set_x(PIO pio, uint sm, uint32_t x) {
+   // Write to the TX FIFO
+   pio_sm_put(pio, sm, x);
+   // execute: pull
+   pio_sm_exec(pio, sm, pio_encode_pull(false, false));
+}
+
+static inline void FLUSH_TUBE_REGS() {
+   uint32_t *p = (uint32_t *)(&tube_regs);
+   set_x(pio1, 2, *p++);
+   set_x(pio1, 3, *p++);
+}
+
+#else
+#define FLUSH_TUBE_REGS(...)
+#endif
+
+
+
+
 void tube_enable_fast6502(void)
 {
    _disable_interrupts();
@@ -252,6 +375,7 @@ static void tube_reset()
    HSTAT1 |= HBIT_3 | HBIT_2 | HBIT_1;
    //tube_updateints_IRQ();
    //tube_updateints_NMI();
+   FLUSH_TUBE_REGS();
 }
 
 // 6502 Host reading the tube registers
@@ -308,6 +432,7 @@ static void __time_critical_func(tube_host_read)(uint32_t addr)
       }
       break;
    }
+   FLUSH_TUBE_REGS();
 }
 
 static void __time_critical_func(tube_host_write)(uint32_t addr, uint8_t val)
@@ -335,7 +460,7 @@ static void __time_critical_func(tube_host_write)(uint32_t addr, uint8_t val)
       } else {
          HSTAT1 &= ~BYTE_TO_WORD(val & 0x3F);
       }
-   
+
 
       if ( HSTAT1 & HBIT_5) {
          tube_irq |= RESET_BIT;
@@ -414,14 +539,15 @@ static void __time_critical_func(tube_host_write)(uint32_t addr, uint8_t val)
       hp4 = val;
       PSTAT4 |=  0x80;
       HSTAT4 &= ~HBIT_6;
-      if (HSTAT1 & HBIT_2) tube_irq |= IRQ_BIT; 
+      if (HSTAT1 & HBIT_2) tube_irq |= IRQ_BIT;
       break;
    }
+   FLUSH_TUBE_REGS();
 }
 
 uint8_t __time_critical_func(tube_parasite_read)(uint32_t addr)
 {
-  
+
    uint8_t temp ;
    switch (addr & 7)
    {
@@ -487,6 +613,9 @@ uint8_t __time_critical_func(tube_parasite_read)(uint32_t addr)
       _enable_interrupts();
       break;
    }
+   if (addr & 1) {
+      FLUSH_TUBE_REGS();
+   }
    return temp;
 }
 
@@ -517,7 +646,7 @@ void tube_parasite_write_banksel(uint32_t addr, uint8_t val)
 void __time_critical_func(tube_parasite_write)(uint32_t addr, uint8_t val)
 {
    _disable_interrupts();
-   
+
 #ifdef DEBUG_TUBE
    if (addr & 1) {
       tube_buffer[tube_index++] = TUBE_WRITE_MARKER | ((addr & 7) << 8) | val;
@@ -585,6 +714,7 @@ void __time_critical_func(tube_parasite_write)(uint32_t addr, uint8_t val)
       PSTAT4 &= ~0x40;
       break;
    }
+   FLUSH_TUBE_REGS();
    _enable_interrupts();
 }
 
@@ -593,7 +723,7 @@ void __time_critical_func(tube_parasite_write)(uint32_t addr, uint8_t val)
 // Returns bit 2 set if RST is asserted by the host or tube
 
 void __time_critical_func(tube_io_handler)(uint32_t mail)
-{ 
+{
    if (((mail >> NRST_PIN) & 1) == 0)        // Check for Reset
    {
       tube_irq |= RESET_BIT;
@@ -756,21 +886,25 @@ void tube_init_hardware()
 #endif
 #else
 
-    gpio_init(D0_PIN);
-    gpio_init(D1_PIN);
-    gpio_init(D2_PIN);
-    gpio_init(D3_PIN);
-    gpio_init(D4_PIN);
-    gpio_init(D5_PIN);
-    gpio_init(D6_PIN);
-    gpio_init(D7_PIN);
-    gpio_init(A0_PIN);
-    gpio_init(A1_PIN);
-    gpio_init(A2_PIN);
-    gpio_init(RNW_PIN);
-    gpio_init(NRST_PIN);
-    gpio_init(NTUBE_PIN);
-    gpio_init(PHI2_PIN);
+#ifdef USE_PIO
+   pio_init(pio0, pio1, 0);
+#else
+   gpio_init(D0_PIN);
+   gpio_init(D1_PIN);
+   gpio_init(D2_PIN);
+   gpio_init(D3_PIN);
+   gpio_init(D4_PIN);
+   gpio_init(D5_PIN);
+   gpio_init(D6_PIN);
+   gpio_init(D7_PIN);
+   gpio_init(A0_PIN);
+   gpio_init(A1_PIN);
+   gpio_init(A2_PIN);
+   gpio_init(RNW_PIN);
+   gpio_init(NRST_PIN);
+   gpio_init(NTUBE_PIN);
+   gpio_init(PHI2_PIN);
+#endif
 
    gpio_init(18);
    gpio_init(20);
@@ -780,11 +914,11 @@ void tube_init_hardware()
 }
 
 int tube_is_rst_active() {
-#ifndef PICO   
+#ifndef PICO
    return ((RPI_GpioBase->GPLEV0 & NRST_MASK) == 0) ;
 #else
    return (gpio_get(NRST_PIN)==0);
-#endif 
+#endif
 }
 #if 0
 static void tube_wait_for_rst_active() {
@@ -898,8 +1032,16 @@ void start_vc_ula()
 //    }
 // }
 #else
+
+#ifdef USE_PIO
+   irq_set_exclusive_handler(PIO0_IRQ_0, picofifo);
+   irq_set_enabled(PIO0_IRQ_0, true);
+   pio0->inte0 = PIO_IRQ0_INTE_SM3_RXNEMPTY_BITS;
+#else
    multicore_launch_core1(picotubecore);
    irq_set_exclusive_handler(SIO_IRQ_PROC0, picofifo);
    irq_set_enabled(SIO_IRQ_PROC0, true);
+#endif
+
 #endif
 }
