@@ -122,26 +122,26 @@ r1  effective address
 // IRQ and NMI B =0
 // Other interrupts don't set the the B flag
 
-.macro statustoR0 bflag
-   LSL   r0, rflagsNZ,#24   // lower bytes cleared
+.macro statustoR0 bflag reg=r0
+   LSL   \reg, rflagsNZ,#24   // lower bytes cleared
    BNE   1f
-   add   r0, #pByteZflag
+   add   \reg, #pByteZflag
 1:
    cmp   rflagsNZ,#0xff
    BLS   2f
-   add   r0, #pByteNflag
+   add   \reg, #pByteNflag
 2:
    SETUP_CARRY r1
    BCC   3f
-   add   r0, #pByteCflag
+   add   \reg, #pByteCflag
 3:
 .ifc \bflag,bflag
-   add   r0, #pByteXflag+pByteBflag
+   add   \reg, #pByteXflag+pByteBflag
 .else
-   add   r0, #pByteXflag
+   add   \reg, #pByteXflag
 .endif
    mov   r1, rPbyteLo
-   orr   r0, r1  // add in V, D and I flags
+   orr   \reg, r1  // add in V, D and I flags
 .endm
 
 @ convert from 6502 status byte (nv-bdizc) in r0 to ARMs Pbyte (NZCV)
@@ -386,14 +386,16 @@ r1  effective address
    strb  rPC, [r0, #2]
    LSR   rPC, rPC,#8
    strb  rPC, [r0, #3]
-   mov   rPC, r0
    @ push pByte in 6502 format
-   statustoR0 \bflag
+   statustoR0 \bflag rPC
 
-   strb  r0, [rPC,#1]
+   strb  rPC, [r0,#1]
 
    mov   r0, #pByteIflag  @ BRK sets interrupt disable just as IRQ would
-   mov   rPbyteLo, r0 // I set B clear and clear DEC flag
+   orr   r1, r0
+   mov   r0, #pByteDflag
+   bic   r1, r0
+   mov   rPbyteLo, r1 // I set B clear and clear DEC flag
 
    ldr   rPC, =0x10000-\vector
    ldrh  rPC, [rPC, rmem]  // vectors are aligned so we can use ldrh
@@ -449,8 +451,8 @@ r1  effective address
    NEXT_INSTRUCTION \inc
 .endm
 
-.macro NOP inc
-   NEXT_INSTRUCTION \inc
+.macro NOP inc align=align
+   NEXT_INSTRUCTION \inc \align
 .endm
 
 .macro RMB bitnum
@@ -639,7 +641,7 @@ l_00:
 breakinstruction:
    add rPC,#1
    INTR 2 bflag
-   NEXT_INSTRUCTION 0 noalign //NB we don't want .ltorg here or we overflow
+   B l_00_overflow
    .balign I_ALIGN, 0
 
 l_01: // Opcode 01 - ORA ($00,X)
@@ -647,7 +649,9 @@ l_01: // Opcode 01 - ORA ($00,X)
    LOGICAL 1 orr
 
 l_02:
-   NOP 1
+   NOP 1 noalign
+l_00_overflow:
+   NEXT_INSTRUCTION 0 
 
 l_03:
    NOP 0
