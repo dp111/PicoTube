@@ -122,7 +122,7 @@ r1  effective address
 // IRQ and NMI B =0
 // Other interrupts don't set the the B flag
 
-.macro statustoR0 bflag reg=r0
+.macro statustoR reg bflag
    LSL   \reg, rflagsNZ,#24   // lower bytes cleared
    BNE   1f
    add   \reg, #pByteZflag
@@ -387,7 +387,7 @@ r1  effective address
    LSR   rPC, rPC,#8
    strb  rPC, [r0, #3]
    @ push pByte in 6502 format
-   statustoR0 \bflag rPC
+   statustoR rPC \bflag
 
    strb  rPC, [r0,#1]
 
@@ -678,7 +678,7 @@ l_07: // Opcode 07 - RMB0 $00
    RMB 0
 
 l_08: // Opcode 08 - PHP
-   statustoR0 bflag
+   statustoR r0 bflag
    pushbyte r0 wrap
    NEXT_INSTRUCTION 0
 
@@ -2483,7 +2483,7 @@ lockup:
    bl    printspace
    pop {r0-r3}
 
-   statustoR0
+   statustoR r0
    bl    printhex8
    bl    printspace
 
