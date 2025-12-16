@@ -693,8 +693,8 @@ void start_ula()
    pio0->inte0 = PIO_IRQ0_INTE_SM3_RXNEMPTY_BITS;
 #else
    multicore_launch_core1(picotubecore);
-   irq_set_exclusive_handler(SIO_IRQ_PROC0, picofifo);
-   irq_set_enabled(SIO_IRQ_PROC0, true);
+   irq_set_exclusive_handler(SIO_FIFO_IRQ_NUM(0), picofifo);
+   irq_set_enabled(SIO_FIFO_IRQ_NUM(0), true);
 #endif
 
 }

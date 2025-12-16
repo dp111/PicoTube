@@ -7,6 +7,11 @@ pico_sdk_init()
 add_definitions(-DPICO=1)
 add_definitions(-DUSE_MEMORY_POINTER=1)
 
+# Uncomment this to use the PIO-based Tube ULA register implementation
+# (there is currently no good reason to use this)
+
+# add_definitions(-DUSE_PIO=1)
+
 add_executable(PicoTube
     tube-client.c
     tube-defs.h

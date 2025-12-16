@@ -1,6 +1,10 @@
 #include "tube-defs.h"
 #include "copro-65tubeasm.h"
 
+#include <hardware/platform_defs.h>
+#include <hardware/regs/pio.h>
+#include <hardware/regs/sio.h>
+
 .text
 
 .global arm_irq_handler
@@ -11,14 +15,17 @@
 // ISR CODE
 // =================================================
 
-#define GPIO_IN         0x04
-#define GPIO_OUT_SET    0x14
-#define GPIO_OUT_CLR    0x18
-#define GPIO_OE_SET     0x24
-#define GPIO_OE_CLR     0x28
+#define GPIO_IN         SIO_GPIO_IN_OFFSET
+#define GPIO_OUT_SET    SIO_GPIO_OUT_SET_OFFSET
+#define GPIO_OUT_CLR    SIO_GPIO_OUT_CLR_OFFSET
+#define GPIO_OE_SET     SIO_GPIO_OE_SET_OFFSET
+#define GPIO_OE_CLR     SIO_GPIO_OE_CLR_OFFSET
 
-#define FIFO_WR         0x54
-#define FIFO_RD         0x58
+#define FIFO_WR         SIO_FIFO_WR_OFFSET
+#define FIFO_RD         SIO_FIFO_RD_OFFSET
+#define FIFO_ST         SIO_FIFO_ST_OFFSET
+
+#define RXF3            PIO_RXF3_OFFSET
 
 #define DEBUG_PIN1      18
 #define DEBUG_PIN2      20
@@ -37,7 +44,7 @@ picofifo:
       mov   r0,#0x20
       lsl   r0,#16
       orr   r1, r0
-      LDR   r0,[r1,#0x2C] // read data out of RX FIFO for PIO0 SM3
+      LDR   r0,[r1,#RXF3] // read data out of RX FIFO for PIO0 SM3
 
 #else
 
@@ -46,7 +53,7 @@ picofifo:
       LDR   r0,[r1,#FIFO_RD] // read data out of fifo
 
       mov   r2,#15
-      str   r2,[r1,#0x50] // Clear FIFO errors
+      str   r2,[r1,#FIFO_ST] // Clear FIFO errors
 #endif
 
       BLX   tube_io_handler

@@ -94,7 +94,22 @@ static const func_ptr emulator_functions[] = {
 volatile unsigned int copro;
 volatile unsigned int copro_speed;
 
+// The RP2350A should overclock to 266MHz on the default voltage.
+//
+// The current PIO code has hard-coded delays (tAD and tDB) that are
+// in units of clock cycles. This needs updating to support
+// overclocking.
+//
+// Ideally arm_speed would be defined in tube-defs.h and the PIO code
+// would define the delays (and pin assignments) from the those
+// values. However, the Pico SDK's PIO assembler doesn't currently
+// support include files..
+
+#if defined(PICO_RP2350A) && !defined(USE_PIO)
+int arm_speed = 266;
+#else
 int arm_speed = 133;
+#endif
 
 static func_ptr emulator;
 
